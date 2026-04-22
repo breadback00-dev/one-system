@@ -4,6 +4,7 @@ dist/
 build/
 coverage/
 .turbo/
+*.tsbuildinfo
 .env
 .env.local
 .env.*.local
@@ -11,4 +12,3 @@ coverage/
 packages/database/generated/
 apps/api/dist/
 apps/worker/dist/
-
