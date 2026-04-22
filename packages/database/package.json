@@ -1,0 +1,22 @@
+{
+  "name": "@one-system/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@one-system/domain": "0.1.0",
+    "@one-system/messaging": "0.1.0",
+    "@one-system/config": "0.1.0",
+    "@prisma/client": "^6.7.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prisma:generate": "dotenv -e ../../.env -- prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev --schema prisma/schema.prisma --name init",
+    "prisma:push": "dotenv -e ../../.env -- prisma db push --schema prisma/schema.prisma --accept-data-loss"
+  }
+}

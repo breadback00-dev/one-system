@@ -1,0 +1,19 @@
+{
+  "name": "@one-system/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@one-system/database": "0.1.0",
+    "@one-system/domain": "0.1.0",
+    "@one-system/integrations": "0.1.0"
+  },
+  "scripts": {
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "echo worker tests TBD",
+    "lint": "echo worker lint TBD",
+    "format": "echo worker format TBD"
+  }
+}

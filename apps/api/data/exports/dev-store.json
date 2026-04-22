@@ -1,0 +1,56 @@
+{
+  "workspaces": [
+    {
+      "id": "workspace_medspa_demo",
+      "name": "One System Demo Med Spa",
+      "niche": "medspa",
+      "timezone": "Europe/London"
+    }
+  ],
+  "contacts": [
+    {
+      "id": "bc648bf9-cbdf-4069-b162-7439bb15001a",
+      "workspaceId": "workspace_medspa_demo",
+      "firstName": "Ava",
+      "createdAt": "2026-04-22T16:17:59.147Z",
+      "phone": "+447700900123"
+    }
+  ],
+  "leads": [
+    {
+      "id": "39fcec91-cad6-4584-a4da-1ec26e6668a2",
+      "workspaceId": "workspace_medspa_demo",
+      "contactId": "bc648bf9-cbdf-4069-b162-7439bb15001a",
+      "source": "website_form",
+      "status": "new",
+      "createdAt": "2026-04-22T16:17:59.147Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "714f2608-fe6f-4ea9-b162-2f9599377a37",
+      "workspaceId": "workspace_medspa_demo",
+      "name": "lead.created",
+      "occurredAt": "2026-04-22T16:17:59.147Z",
+      "payload": {
+        "leadId": "39fcec91-cad6-4584-a4da-1ec26e6668a2",
+        "contactId": "bc648bf9-cbdf-4069-b162-7439bb15001a",
+        "source": "website_form",
+        "firstName": "Ava",
+        "phone": "+447700900123"
+      }
+    },
+    {
+      "id": "0c9b36b5-8ae9-433c-ad4b-abac6f763f23",
+      "workspaceId": "workspace_medspa_demo",
+      "name": "message.outbound_queued",
+      "occurredAt": "2026-04-22T16:17:59.192Z",
+      "payload": {
+        "contactId": "bc648bf9-cbdf-4069-b162-7439bb15001a",
+        "channel": "sms",
+        "message": "Hi Ava, thanks for reaching out to us. We'd love to help you book your consultation. Reply here with the treatment you're interested in and we'll get you sorted.",
+        "reason": "lead-capture.instant-follow-up"
+      }
+    }
+  ]
+}

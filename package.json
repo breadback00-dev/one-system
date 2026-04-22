@@ -1,0 +1,43 @@
+{
+  "name": "one-system",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "modules/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @one-system/dashboard",
+    "dev:dashboard": "npm run dev --workspace @one-system/dashboard",
+    "dev:api": "npm run dev --workspace @one-system/api",
+    "dev:worker": "npm run dev --workspace @one-system/worker",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d postgres",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:generate": "npm run prisma:generate --workspace @one-system/database",
+    "db:migrate": "npm run prisma:migrate --workspace @one-system/database",
+    "db:push": "npm run prisma:push --workspace @one-system/database"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "dotenv": "^16.6.1",
+    "dotenv-cli": "^8.0.0",
+    "prisma": "^6.7.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "twilio": "^6.0.0"
+  }
+}

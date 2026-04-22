@@ -1,0 +1,20 @@
+{
+  "name": "@one-system/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@one-system/database": "0.1.0",
+    "@one-system/domain": "0.1.0",
+    "@one-system/reactivation": "0.1.0",
+    "@one-system/workflows": "0.1.0"
+  },
+  "scripts": {
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "echo api tests TBD",
+    "lint": "echo api lint TBD",
+    "format": "echo api format TBD"
+  }
+}

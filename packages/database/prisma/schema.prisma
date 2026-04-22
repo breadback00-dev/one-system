@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id            String         @id @default(cuid())
+  name          String
+  niche         String
+  timezone      String
+  contacts      Contact[]
+  leads         Lead[]
+  events        Event[]
+  conversations Conversation[]
+  appointments  Appointment[]
+  messages      Message[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Contact {
+  id            String         @id @default(cuid())
+  workspaceId   String
+  firstName     String
+  lastName      String?
+  email         String?
+  phone         String?
+  conversations Conversation[]
+  appointments  Appointment[]
+  leads         Lead[]
+  messages      Message[]
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([workspaceId])
+  @@unique([workspaceId, email])
+  @@unique([workspaceId, phone])
+}
+
+model Lead {
+  id          String       @id @default(cuid())
+  workspaceId String
+  contactId   String
+  source      String
+  status      String
+  campaignId  String?
+  contact     Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([workspaceId, status])
+  @@index([contactId])
+}
+
+model Conversation {
+  id         String    @id @default(cuid())
+  workspaceId String
+  contactId  String
+  channel    String
+  messages   Message[]
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact    Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@index([workspaceId, contactId])
+  @@unique([workspaceId, contactId, channel])
+}
+
+model Appointment {
+  id          String    @id @default(cuid())
+  workspaceId String
+  contactId   String
+  leadId      String?
+  startsAt    DateTime
+  outcome     String?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead        Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([workspaceId, startsAt])
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  payload     Json
+  occurredAt  DateTime
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, name, occurredAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  workspaceId    String
+  contactId      String
+  conversationId String?
+  queuedEventId  String?      @unique
+  channel        String
+  direction      String
+  provider       String
+  destination    String
+  body           String
+  status         String
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact        Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([contactId, createdAt])
+}

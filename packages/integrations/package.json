@@ -1,0 +1,18 @@
+{
+  "name": "@one-system/integrations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@one-system/config": "0.1.0",
+    "@one-system/messaging": "0.1.0",
+    "twilio": "^5.10.4"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
