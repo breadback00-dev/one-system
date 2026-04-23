@@ -6,9 +6,9 @@ M1 - Platform Foundation
 
 ## Active Module
 
-Module 2 - Database Reactivation
+Module 3 - Reviews + Referrals Automation
 
-Stay on Module 2 until explicitly told to switch modules. Say clearly before starting any new module.
+Stay on Module 3 until explicitly told to switch modules. Say clearly before starting any new module.
 
 ## What Exists
 
@@ -84,6 +84,11 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 - Module 2 dashboard feedback parsing now lives in a shared utility with regression tests wired into the dashboard `test` script
 - local Module 2 proof run on 2026-04-23 seeded one live import (4 dormant contacts), queued one campaign run (4 queued), booked one queue item, and left three open queue items
 - local Module 2 readiness evidence now shows all five checklist checks as ready in the current demo workspace state
+- Module 3 now has a real workspace package in `modules/reviews_referrals` with readiness preview and campaign queue execution logic
+- Module 3 now has `GET /reviews-referrals/readiness`, `POST /reviews-referrals/run`, and `GET /reviews-referrals/report` API endpoints
+- the dashboard now includes Module 3 outcomes visibility and campaign controls with readiness + run feedback
+- Module 3 reporting now tracks queued, delivered, replied, promoter-signal, and referral-intent outcomes
+- appointments created with `outcome: completed` now auto-trigger a delayed post-visit Module 3 review request with cooldown protection
 - module folders for all five product areas
 - med spa selected as first implementation niche
 
@@ -105,16 +110,16 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 
 ## What Comes Next
 
-- continue Module 2 only
-- decide whether to keep current seeded Module 2 demo data or reset it before handoff
-- prepare final Module 2 closeout/signoff summary while staying on Module 2 unless explicitly switched
+- continue Module 3 implementation slices
+- add stronger satisfaction gating and referral routing paths on inbound feedback
+- design first response-suggestion flow for operator-assisted review handling
 - keep commits to meaningful module/capability checkpoints, not every small slice
 
 ## Immediate Next Step
 
-- keep Module 2 as active module and do not start Module 3 without explicit instruction
-- confirm with the user whether to preserve or reset seeded demo data in `workspace_medspa_demo`
-- if requested, produce the final Module 2 readiness/signoff handoff note from current evidence
+- keep Module 3 as active module and do not start Module 4 without explicit instruction
+- tighten review-response routing for positive vs negative sentiment replies
+- keep validating each Module 3 checkpoint with `npm run typecheck` and `npm run build`
 
 ## How To Resume
 
@@ -123,4 +128,4 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 3. Run `git status --short`
 4. Review the uncommitted Module 2 files before editing
 5. Run `npm run typecheck`
-6. Continue Module 2 only unless the user explicitly says to switch modules
+6. Continue Module 3 only unless the user explicitly says to switch modules

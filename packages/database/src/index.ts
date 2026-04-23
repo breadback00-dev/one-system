@@ -1167,6 +1167,45 @@ export async function getReviewRequestCandidates(args: {
   return candidates;
 }
 
+export async function getReviewRequestCandidateForAppointment(args: {
+  workspaceId: string;
+  appointmentId: string;
+}): Promise<ReviewRequestCandidate | null> {
+  const appointment = await prisma.appointment.findFirst({
+    where: {
+      id: args.appointmentId,
+      workspaceId: args.workspaceId,
+      outcome: "completed",
+      contact: {
+        OR: [{ phone: { not: null } }, { email: { not: null } }],
+      },
+    },
+    include: {
+      contact: true,
+    },
+  });
+
+  if (!appointment) {
+    return null;
+  }
+
+  const destination = appointment.contact.phone ?? appointment.contact.email;
+
+  if (!destination) {
+    return null;
+  }
+
+  return {
+    workspaceId: appointment.workspaceId,
+    contactId: appointment.contactId,
+    appointmentId: appointment.id,
+    firstName: appointment.contact.firstName,
+    channel: appointment.contact.phone ? "sms" : "email",
+    destination,
+    completedVisitAt: appointment.startsAt.toISOString(),
+  };
+}
+
 export async function getMostRecentLeadForContact(args: {
   workspaceId: string;
   contactId: string;

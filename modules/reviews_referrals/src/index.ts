@@ -4,6 +4,7 @@ import { createQueuedOutboundMessageEvent } from "@one-system/domain";
 import {
   appendEvents,
   getRecentQueuedMessagesForReason,
+  getReviewRequestCandidateForAppointment,
   getReviewRequestCandidates,
   type ReviewRequestCandidate,
 } from "@one-system/database";
@@ -51,7 +52,40 @@ export interface ExecuteReviewsReferralsRunResult
   runId: string;
 }
 
+export interface TriggerPostVisitReviewRequestInput {
+  workspaceId: string;
+  appointmentId: string;
+  campaignKey?: string;
+  cooldownDays?: number;
+  delayHours?: number;
+}
+
+export type TriggerPostVisitReviewRequestStatus =
+  | "queued"
+  | "not_eligible"
+  | "cooldown_blocked";
+
+export interface TriggerPostVisitReviewRequestResult {
+  ok: true;
+  status: TriggerPostVisitReviewRequestStatus;
+  appointmentId: string;
+  campaignKey: string;
+  cooldownDays: number;
+  delayHours: number;
+  runId: string;
+  candidateCount: number;
+  queuedCount: number;
+  skippedCount: number;
+  contactId?: string;
+  queuedEventId?: string;
+  deliverAfter?: string;
+}
+
 const DEFAULT_CAMPAIGN_KEY = "reviews-referrals-default";
+const DEFAULT_POST_VISIT_CAMPAIGN_KEY = "reviews-referrals-post-visit";
+const DEFAULT_POST_VISIT_COOLDOWN_DAYS = 30;
+const DEFAULT_POST_VISIT_DELAY_HOURS = 24;
+const MINIMUM_POST_VISIT_DELAY_MINUTES = 5;
 const CAMPAIGN_KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 function getReadinessStatus(args: {
@@ -87,6 +121,27 @@ function normalizeCampaignKey(input: string): string {
 
 function normalizeCampaignKeyForComparison(input: string | undefined): string {
   return (input ?? "").trim().toLowerCase();
+}
+
+function buildReviewRequestMessage(firstName: string): string {
+  return `Hi ${firstName}, thanks for visiting us recently. On a 1-5 scale, how was your experience? If you felt it was a 5, we'd love to help you refer a friend as well.`;
+}
+
+function getDeliverAfterIso(args: {
+  completedVisitAt: string;
+  delayHours: number;
+}): string {
+  const completedVisitAt = new Date(args.completedVisitAt);
+  const delayedFromVisit = new Date(
+    completedVisitAt.getTime() + args.delayHours * 60 * 60 * 1000,
+  );
+  const minimumBuffer = new Date(
+    Date.now() + MINIMUM_POST_VISIT_DELAY_MINUTES * 60 * 1000,
+  );
+
+  return (delayedFromVisit > minimumBuffer
+    ? delayedFromVisit
+    : minimumBuffer).toISOString();
 }
 
 async function evaluateReviewsReferralsReadiness(
@@ -148,7 +203,7 @@ export function buildReviewsReferralsOutreachEvents(
       contactId: candidate.contactId,
       channel: candidate.channel,
       destination: candidate.destination,
-      message: `Hi ${candidate.firstName}, thanks for visiting us recently. On a 1-5 scale, how was your experience? If you felt it was a 5, we'd love to help you refer a friend as well.`,
+      message: buildReviewRequestMessage(candidate.firstName),
       reason: reviewsReferralsWorkflow.key,
       campaignKey: config.campaignKey,
       runId,
@@ -186,6 +241,105 @@ export async function previewReviewsReferralsRun(
   return {
     ok: true,
     ...readiness,
+  };
+}
+
+export async function triggerPostVisitReviewRequest(
+  input: TriggerPostVisitReviewRequestInput,
+): Promise<TriggerPostVisitReviewRequestResult> {
+  const campaignKey = normalizeCampaignKey(
+    input.campaignKey ?? DEFAULT_POST_VISIT_CAMPAIGN_KEY,
+  );
+  const cooldownDays = Math.max(
+    1,
+    Math.min(90, Math.floor(input.cooldownDays ?? DEFAULT_POST_VISIT_COOLDOWN_DAYS)),
+  );
+  const delayHours = Math.max(
+    0,
+    Math.min(168, Math.floor(input.delayHours ?? DEFAULT_POST_VISIT_DELAY_HOURS)),
+  );
+  const candidate = await getReviewRequestCandidateForAppointment({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+  });
+
+  if (!candidate) {
+    return {
+      ok: true,
+      status: "not_eligible",
+      appointmentId: input.appointmentId,
+      campaignKey,
+      cooldownDays,
+      delayHours,
+      runId: "not-queued",
+      candidateCount: 0,
+      queuedCount: 0,
+      skippedCount: 0,
+    };
+  }
+
+  const recentTargets = await getRecentQueuedMessagesForReason({
+    workspaceId: input.workspaceId,
+    reason: reviewsReferralsWorkflow.key,
+    since: new Date(
+      Date.now() - cooldownDays * 24 * 60 * 60 * 1000,
+    ).toISOString(),
+  });
+  const recentlyTargeted = recentTargets.some(
+    (target) =>
+      target.contactId === candidate.contactId &&
+      normalizeCampaignKeyForComparison(target.campaignKey) === campaignKey,
+  );
+
+  if (recentlyTargeted) {
+    return {
+      ok: true,
+      status: "cooldown_blocked",
+      appointmentId: input.appointmentId,
+      campaignKey,
+      cooldownDays,
+      delayHours,
+      runId: "cooldown-blocked",
+      candidateCount: 1,
+      queuedCount: 0,
+      skippedCount: 1,
+      contactId: candidate.contactId,
+    };
+  }
+
+  const runId = randomUUID();
+  const deliverAfter = getDeliverAfterIso({
+    completedVisitAt: candidate.completedVisitAt,
+    delayHours,
+  });
+  const queuedEvent = createQueuedOutboundMessageEvent({
+    workspaceId: candidate.workspaceId,
+    contactId: candidate.contactId,
+    channel: candidate.channel,
+    destination: candidate.destination,
+    message: buildReviewRequestMessage(candidate.firstName),
+    reason: reviewsReferralsWorkflow.key,
+    campaignKey,
+    runId,
+    deliverAfter,
+  });
+
+  await appendEvents([queuedEvent]);
+
+  return {
+    ok: true,
+    status: "queued",
+    appointmentId: input.appointmentId,
+    campaignKey,
+    cooldownDays,
+    delayHours,
+    runId,
+    candidateCount: 1,
+    queuedCount: 1,
+    skippedCount: 0,
+    contactId: candidate.contactId,
+    queuedEventId: queuedEvent.id,
+    deliverAfter,
   };
 }
 

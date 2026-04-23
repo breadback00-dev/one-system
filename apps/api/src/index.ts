@@ -45,6 +45,7 @@ import {
 import {
   executeReviewsReferralsRun,
   previewReviewsReferralsRun,
+  triggerPostVisitReviewRequest,
 } from "@one-system/reviews-referrals";
 import {
   parseTwilioInboundMessage,
@@ -754,6 +755,24 @@ const server = createServer(async (request, response) => {
       const input = validateAppointmentInput(body);
       const appointmentResult = createAppointment(input);
       const saved = await saveAppointmentTransaction(appointmentResult);
+      let reviewsReferralsTrigger:
+        | Awaited<ReturnType<typeof triggerPostVisitReviewRequest>>
+        | undefined;
+      let reviewsReferralsTriggerError: string | undefined;
+
+      if (saved.appointment.outcome === "completed") {
+        try {
+          reviewsReferralsTrigger = await triggerPostVisitReviewRequest({
+            workspaceId: saved.appointment.workspaceId,
+            appointmentId: saved.appointment.id,
+          });
+        } catch (error) {
+          reviewsReferralsTriggerError =
+            error instanceof Error
+              ? error.message
+              : "Unable to queue post-visit review request.";
+        }
+      }
 
       sendJson(response, 201, {
         workspace: saved.workspace,
@@ -762,6 +781,12 @@ const server = createServer(async (request, response) => {
           startsAt: saved.appointment.startsAt.toISOString(),
         },
         events: saved.events,
+        ...(reviewsReferralsTrigger
+          ? { reviewsReferralsTrigger }
+          : {}),
+        ...(reviewsReferralsTriggerError
+          ? { reviewsReferralsTriggerError }
+          : {}),
       });
       return;
     }
