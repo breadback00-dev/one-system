@@ -352,6 +352,16 @@ h1 {
   margin: 0;
 }
 
+.notice-card.notice-success {
+  border-color: rgba(104, 141, 78, 0.35);
+  background: rgba(104, 141, 78, 0.14);
+}
+
+.notice-card.notice-error {
+  border-color: rgba(165, 80, 45, 0.35);
+  background: rgba(165, 80, 45, 0.12);
+}
+
 .readiness-card {
   display: grid;
   gap: 12px;

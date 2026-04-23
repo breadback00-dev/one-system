@@ -29,6 +29,14 @@ const modules = [
 ];
 
 type PageSearchParams = Promise<Record<string, string | string[] | undefined>>;
+type QueueActionName = "mark_handled" | "book_slot";
+type FeedbackStatus = "success" | "error";
+
+interface QueueActionFeedback {
+  action: QueueActionName;
+  status: FeedbackStatus;
+  message: string;
+}
 
 function formatRelativeIso(iso: string) {
   const date = new Date(iso);
@@ -111,6 +119,49 @@ function getReactivationRunFeedback(
   };
 }
 
+function getReactivationRunErrorMessage(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  if (getSearchParamValue(searchParams, "reactivationRun") !== "error") {
+    return null;
+  }
+
+  return (
+    getSearchParamValue(searchParams, "reactivationRunMessage") ??
+    "Unable to queue the reactivation campaign."
+  );
+}
+
+function getQueueActionFeedback(
+  searchParams: Record<string, string | string[] | undefined>,
+): QueueActionFeedback | null {
+  const action = getSearchParamValue(searchParams, "queueAction");
+  const status = getSearchParamValue(searchParams, "queueActionStatus");
+
+  if (!action || !status) {
+    return null;
+  }
+
+  if (
+    (action !== "mark_handled" && action !== "book_slot") ||
+    (status !== "success" && status !== "error")
+  ) {
+    return null;
+  }
+
+  const message =
+    getSearchParamValue(searchParams, "queueActionMessage") ??
+    (action === "book_slot"
+      ? "Reactivation booking action processed."
+      : "Reactivation handling action processed.");
+
+  return {
+    action,
+    status,
+    message,
+  };
+}
+
 function getModule2ReadinessChecks(args: {
   liveImportCount: number;
   dryRunImportCount: number;
@@ -176,6 +227,9 @@ export default async function HomePage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const reactivationRunFeedback =
     getReactivationRunFeedback(resolvedSearchParams);
+  const reactivationRunErrorMessage =
+    getReactivationRunErrorMessage(resolvedSearchParams);
+  const queueActionFeedback = getQueueActionFeedback(resolvedSearchParams);
   const [
     deliveryStatus,
     funnelSnapshot,
@@ -446,6 +500,13 @@ export default async function HomePage({
               </div>
             </div>
           ) : null}
+          {reactivationRunErrorMessage ? (
+            <div className="notice-card notice-error">
+              <strong>Campaign run blocked</strong>
+              <p>{reactivationRunErrorMessage}</p>
+              <p>Review the campaign inputs and try again.</p>
+            </div>
+          ) : null}
           <p className="action-warning">
             Queues outreach for dormant contacts that match this audience. Contacts
             reached recently for the same campaign key are skipped by the cooldown.
@@ -600,6 +661,19 @@ export default async function HomePage({
 
         <article className="panel timeline-panel">
           <h2>Reactivation Follow-Up Queue</h2>
+          {queueActionFeedback ? (
+            <div
+              className={`notice-card ${queueActionFeedback.status === "error" ? "notice-error" : "notice-success"}`}
+            >
+              <strong>
+                {queueActionFeedback.action === "book_slot"
+                  ? "Booking action"
+                  : "Handle action"}{" "}
+                {queueActionFeedback.status === "success" ? "completed" : "blocked"}
+              </strong>
+              <p>{queueActionFeedback.message}</p>
+            </div>
+          ) : null}
           <div className="list-block">
             {reactivationQueue.length === 0 ? (
               <p>No open reactivation follow-up items right now.</p>
