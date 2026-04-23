@@ -1004,6 +1004,15 @@ export async function getReactivationCandidates(args: {
             appointments: {
               some: {
                 startsAt: { lte: cutoff },
+                outcome: {
+                  notIn: ["cancelled", "no_show"],
+                },
+              },
+              none: {
+                startsAt: { gt: cutoff },
+                outcome: {
+                  notIn: ["cancelled", "no_show"],
+                },
               },
             },
             messages: {
