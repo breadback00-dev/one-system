@@ -543,15 +543,25 @@ export interface ReactivationImportRow {
   phone?: string;
   segment: "stale_lead" | "past_customer";
   lastActivityAt: string;
+  rowNumber?: number;
+}
+
+export interface ReactivationImportSkippedRow {
+  rowNumber: number;
+  reason: string;
 }
 
 export interface ReactivationImportResult {
   workspaceId: string;
+  dryRun: boolean;
   importedCount: number;
   createdContactCount: number;
   updatedContactCount: number;
   staleLeadCount: number;
   pastCustomerCount: number;
+  duplicateActivityCount: number;
+  skippedRowCount: number;
+  skippedRows: ReactivationImportSkippedRow[];
 }
 
 export async function getRecentLeadOverview(limit = 6): Promise<LeadOverviewItem[]> {
@@ -603,14 +613,19 @@ export async function getRecentAppointmentOverview(
 export async function importReactivationContacts(args: {
   workspaceId?: string;
   rows: ReactivationImportRow[];
+  dryRun?: boolean;
+  skippedRows?: ReactivationImportSkippedRow[];
 }): Promise<ReactivationImportResult> {
   const workspaceId = args.workspaceId ?? DEFAULT_WORKSPACE_ID;
   await ensureWorkspace(workspaceId);
+  const dryRun = args.dryRun ?? false;
 
   let createdContactCount = 0;
   let updatedContactCount = 0;
   let staleLeadCount = 0;
   let pastCustomerCount = 0;
+  let duplicateActivityCount = 0;
+  const skippedRows = [...(args.skippedRows ?? [])];
 
   await prisma.$transaction(async (tx) => {
     for (const row of args.rows) {
@@ -624,6 +639,49 @@ export async function importReactivationContacts(args: {
           ],
         },
       });
+      const duplicateActivity =
+        row.segment === "past_customer"
+          ? await tx.appointment.findFirst({
+              where: {
+                workspaceId,
+                contactId: existingContact?.id ?? "",
+                startsAt: lastActivityAt,
+                outcome: "completed",
+              },
+            })
+          : await tx.lead.findFirst({
+              where: {
+                workspaceId,
+                contactId: existingContact?.id ?? "",
+                source: "reactivation_import",
+                createdAt: lastActivityAt,
+              },
+            });
+
+      if (duplicateActivity) {
+        duplicateActivityCount += 1;
+        skippedRows.push({
+          rowNumber: row.rowNumber ?? 0,
+          reason: "Duplicate reactivation import activity already exists.",
+        });
+        continue;
+      }
+
+      if (dryRun) {
+        if (existingContact) {
+          updatedContactCount += 1;
+        } else {
+          createdContactCount += 1;
+        }
+
+        if (row.segment === "past_customer") {
+          pastCustomerCount += 1;
+        } else {
+          staleLeadCount += 1;
+        }
+        continue;
+      }
+
       const contact = existingContact
         ? await tx.contact.update({
             where: { id: existingContact.id },
@@ -680,11 +738,15 @@ export async function importReactivationContacts(args: {
 
   return {
     workspaceId,
-    importedCount: args.rows.length,
+    dryRun,
+    importedCount: staleLeadCount + pastCustomerCount,
     createdContactCount,
     updatedContactCount,
     staleLeadCount,
     pastCustomerCount,
+    duplicateActivityCount,
+    skippedRowCount: skippedRows.length,
+    skippedRows,
   };
 }
 

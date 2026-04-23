@@ -23,6 +23,7 @@ import {
   saveLeadTransaction,
   type ReactivationAudienceSegment,
   type ReactivationImportRow,
+  type ReactivationImportSkippedRow,
 } from "@one-system/database";
 import {
   createAppointment,
@@ -310,7 +311,10 @@ function parseCsvRows(input: string): string[][] {
   return rows;
 }
 
-function parseReactivationImportCsv(input: string): ReactivationImportRow[] {
+function parseReactivationImportCsv(input: string): {
+  rows: ReactivationImportRow[];
+  skippedRows: ReactivationImportSkippedRow[];
+} {
   const [headerRow, ...dataRows] = parseCsvRows(input);
 
   if (!headerRow) {
@@ -326,7 +330,10 @@ function parseReactivationImportCsv(input: string): ReactivationImportRow[] {
     throw new Error(`CSV import is missing headers: ${missingHeaders.join(", ")}.`);
   }
 
-  return dataRows.map((row, rowIndex) => {
+  const rows: ReactivationImportRow[] = [];
+  const skippedRows: ReactivationImportSkippedRow[] = [];
+
+  dataRows.forEach((row, rowIndex) => {
     const getValue = (header: (typeof reactivationImportHeaders)[number]) =>
       row[headerIndexes.get(header)!]?.trim() ?? "";
     const firstName = getValue("firstName");
@@ -338,32 +345,40 @@ function parseReactivationImportCsv(input: string): ReactivationImportRow[] {
     const rowNumber = rowIndex + 2;
 
     if (!firstName) {
-      throw new Error(`CSV row ${rowNumber} is missing firstName.`);
+      skippedRows.push({ rowNumber, reason: "Missing firstName." });
+      return;
     }
 
     if (!email && !phone) {
-      throw new Error(`CSV row ${rowNumber} needs email or phone.`);
+      skippedRows.push({ rowNumber, reason: "Missing email or phone." });
+      return;
     }
 
     if (segment !== "stale_lead" && segment !== "past_customer") {
-      throw new Error(
-        `CSV row ${rowNumber} segment must be stale_lead or past_customer.`,
-      );
+      skippedRows.push({
+        rowNumber,
+        reason: "Segment must be stale_lead or past_customer.",
+      });
+      return;
     }
 
     if (!lastActivityAt || Number.isNaN(new Date(lastActivityAt).getTime())) {
-      throw new Error(`CSV row ${rowNumber} has an invalid lastActivityAt.`);
+      skippedRows.push({ rowNumber, reason: "Invalid lastActivityAt." });
+      return;
     }
 
-    return {
+    rows.push({
       firstName,
       segment,
       lastActivityAt: new Date(lastActivityAt).toISOString(),
+      rowNumber,
       ...(lastName ? { lastName } : {}),
       ...(email ? { email } : {}),
       ...(phone ? { phone } : {}),
-    } satisfies ReactivationImportRow;
+    });
   });
+
+  return { rows, skippedRows };
 }
 
 function validateReactivationReadinessQuery(requestUrl: URL) {
@@ -642,12 +657,14 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "POST" && requestUrl.pathname === "/reactivation/import") {
       const csv = await readTextBody(request);
-      const rows = parseReactivationImportCsv(csv);
+      const { rows, skippedRows } = parseReactivationImportCsv(csv);
       const result = await importReactivationContacts({
         workspaceId:
           requestUrl.searchParams.get("workspaceId")?.trim() ||
           "workspace_medspa_demo",
         rows,
+        dryRun: requestUrl.searchParams.get("dryRun") === "true",
+        skippedRows,
       });
       sendJson(response, 201, result);
       return;

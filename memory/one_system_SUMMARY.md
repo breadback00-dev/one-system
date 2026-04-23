@@ -69,6 +69,7 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 - the dashboard campaign controls now show default readiness before queueing outreach
 - Module 2 past-customer reactivation candidates now require old appointment activity, and candidate `lastActivityAt` reflects the latest lead, appointment, message, or contact activity
 - Module 2 now has `POST /reactivation/import` for CSV dormant contact import with `stale_lead` and `past_customer` rows
+- Module 2 CSV import now supports dry-run previews, row-level skip reporting, and duplicate import activity detection
 - module folders for all five product areas
 - med spa selected as first implementation niche
 
