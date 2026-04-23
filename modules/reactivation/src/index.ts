@@ -102,6 +102,10 @@ function normalizeCampaignKey(input: string): string {
   return campaignKey;
 }
 
+function normalizeCampaignKeyForComparison(input: string | undefined): string {
+  return (input ?? "").trim().toLowerCase();
+}
+
 async function evaluateReactivationReadiness(
   input: ExecuteReactivationRunInput,
 ): Promise<Omit<ReactivationReadinessResult, "ok">> {
@@ -120,7 +124,10 @@ async function evaluateReactivationReadiness(
   });
   const recentlyTargetedContactIds = new Set(
     recentTargets
-      .filter((target) => target.campaignKey === campaignKey)
+      .filter(
+        (target) =>
+          normalizeCampaignKeyForComparison(target.campaignKey) === campaignKey,
+      )
       .map((target) => target.contactId),
   );
   const eligibleCandidates = candidates.filter(
