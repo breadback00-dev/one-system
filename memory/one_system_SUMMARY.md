@@ -67,6 +67,7 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 - Module 2 campaign run results now include readiness status and segment breakdowns so operators can distinguish queued campaigns from no-audience or cooldown-blocked runs
 - Module 2 now has a side-effect-free reactivation readiness preview reused by the dashboard and exposed at `GET /reactivation/readiness`
 - the dashboard campaign controls now show default readiness before queueing outreach
+- Module 2 past-customer reactivation candidates now require old appointment activity, and candidate `lastActivityAt` reflects the latest lead, appointment, message, or contact activity
 - module folders for all five product areas
 - med spa selected as first implementation niche
 

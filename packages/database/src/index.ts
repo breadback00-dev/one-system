@@ -718,6 +718,14 @@ export async function getReactivationCandidates(args: {
     orderBy: { createdAt: "asc" },
     take: args.limit ?? 25,
     include: {
+      appointments: {
+        orderBy: { startsAt: "desc" },
+        take: 1,
+      },
+      leads: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -756,7 +764,9 @@ export async function getReactivationCandidates(args: {
           where: {
             workspaceId: args.workspaceId,
             appointments: {
-              some: {},
+              some: {
+                startsAt: { lte: cutoff },
+              },
             },
             messages: {
               none: {
@@ -775,8 +785,14 @@ export async function getReactivationCandidates(args: {
   ): ReactivationCandidate => {
     const destination = contact.phone ?? contact.email ?? "";
     const channel = contact.phone ? "sms" : "email";
-    const lastActivityAt = (
-      contact.messages[0]?.createdAt ?? contact.createdAt
+    const activityDates = [
+      contact.messages[0]?.createdAt,
+      contact.appointments[0]?.startsAt,
+      contact.leads[0]?.createdAt,
+      contact.createdAt,
+    ].filter((date): date is Date => Boolean(date));
+    const lastActivityAt = new Date(
+      Math.max(...activityDates.map((date) => date.getTime())),
     ).toISOString();
 
     return {

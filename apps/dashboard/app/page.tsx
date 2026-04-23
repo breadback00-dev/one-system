@@ -399,6 +399,22 @@ export default async function HomePage({
                 </strong>
               </div>
             </div>
+            {defaultReactivationReadiness.candidates.length > 0 ? (
+              <div className="preview-list">
+                <span className="stat-label">Ready audience preview</span>
+                {defaultReactivationReadiness.candidates.slice(0, 3).map((candidate) => (
+                  <div className="preview-row" key={candidate.contactId}>
+                    <strong>{candidate.firstName}</strong>
+                    <span>
+                      {candidate.segment === "past_customer"
+                        ? "Past customer"
+                        : "Stale lead"}{" "}
+                      • Last active {formatRelativeIso(candidate.lastActivityAt)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
           <form action={runReactivationCampaign} className="control-form">
             <label>
