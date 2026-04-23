@@ -10,7 +10,10 @@ import {
   getRecentMessageTimeline,
 } from "@one-system/database";
 import { SectionCard } from "@one-system/ui";
-import { markReactivationItemHandled } from "./actions";
+import {
+  bookReactivationItemTomorrow,
+  markReactivationItemHandled,
+} from "./actions";
 
 const modules = [
   "Lead Capture + Instant Follow-Up",
@@ -288,22 +291,35 @@ export default async function HomePage() {
                         item.qualifiedAt ?? item.repliedAt ?? item.queuedAt,
                       )}
                     </time>
-                    <form action={markReactivationItemHandled}>
-                      <input
-                        name="queuedEventId"
-                        type="hidden"
-                        value={item.queuedEventId}
-                      />
-                      <input name="contactId" type="hidden" value={item.contactId} />
-                      <input
-                        name="note"
-                        type="hidden"
-                        value={`Handled from Module 2 dashboard queue at ${new Date().toISOString()}`}
-                      />
-                      <button className="text-button" type="submit">
-                        Mark handled
-                      </button>
-                    </form>
+                    <div className="action-row">
+                      <form action={bookReactivationItemTomorrow}>
+                        <input
+                          name="queuedEventId"
+                          type="hidden"
+                          value={item.queuedEventId}
+                        />
+                        <input name="contactId" type="hidden" value={item.contactId} />
+                        <button className="text-button" type="submit">
+                          Book tomorrow
+                        </button>
+                      </form>
+                      <form action={markReactivationItemHandled}>
+                        <input
+                          name="queuedEventId"
+                          type="hidden"
+                          value={item.queuedEventId}
+                        />
+                        <input name="contactId" type="hidden" value={item.contactId} />
+                        <input
+                          name="note"
+                          type="hidden"
+                          value={`Handled from Module 2 dashboard queue at ${new Date().toISOString()}`}
+                        />
+                        <button className="text-button text-button-secondary" type="submit">
+                          Mark handled
+                        </button>
+                      </form>
+                    </div>
                   </div>
                 </div>
               ))

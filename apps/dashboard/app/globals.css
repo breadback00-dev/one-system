@@ -283,6 +283,13 @@ h1 {
   justify-items: end;
 }
 
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .pill {
   display: inline-block;
   padding: 6px 10px;
@@ -323,6 +330,15 @@ h1 {
   background: var(--accent);
 }
 
+.text-button-secondary {
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.text-button-secondary:hover {
+  background: rgba(165, 80, 45, 0.12);
+}
+
 @media (max-width: 720px) {
   .page-shell {
     padding: 32px 18px 56px;
@@ -348,5 +364,9 @@ h1 {
 
   .row-meta {
     justify-items: start;
+  }
+
+  .action-row {
+    justify-content: flex-start;
   }
 }
