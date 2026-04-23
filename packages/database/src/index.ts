@@ -2016,7 +2016,14 @@ export async function getPaidAdsOutcomeReport(args: {
     nurtureQueuedEvents[0]!.occurredAt,
   );
 
-  const [leads, deliveredEvents, inboundMessages, appointments, spendEntries] =
+  const [
+    leads,
+    deliveredEvents,
+    inboundMessages,
+    bookingEvents,
+    appointments,
+    spendEntries,
+  ] =
     await Promise.all([
       leadIds.length > 0
         ? prisma.lead.findMany({
@@ -2049,6 +2056,17 @@ export async function getPaidAdsOutcomeReport(args: {
         },
         orderBy: { createdAt: "asc" },
       }),
+      prisma.event.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          name: "appointment.booked",
+          occurredAt: {
+            gte: earliestQueuedAt,
+          },
+        },
+        orderBy: { occurredAt: "asc" },
+        take: 1000,
+      }),
       prisma.appointment.findMany({
         where: {
           workspaceId: args.workspaceId,
@@ -2079,6 +2097,7 @@ export async function getPaidAdsOutcomeReport(args: {
     ]);
 
   const leadById = new Map(leads.map((lead) => [lead.id, lead]));
+  const contactIdSet = new Set(contactIds);
   const queuedEventIdSet = new Set(queuedEventIds);
   const deliveredByQueuedEventId = new Map(
     deliveredEvents
@@ -2098,6 +2117,17 @@ export async function getPaidAdsOutcomeReport(args: {
     existing.push(appointment);
     appointmentsByContactId.set(appointment.contactId, existing);
   }
+  const bookedAtByContactId = new Map<string, string[]>();
+  for (const event of bookingEvents) {
+    const payload = event.payload as unknown as AppointmentBookedPayload;
+    if (!contactIdSet.has(payload.contactId)) {
+      continue;
+    }
+
+    const existing = bookedAtByContactId.get(payload.contactId) ?? [];
+    existing.push(payload.bookedAt);
+    bookedAtByContactId.set(payload.contactId, existing);
+  }
   const defaultCurrency =
     spendEntries.find((entry) => entry.currency)?.currency ?? "USD";
 
@@ -2110,9 +2140,13 @@ export async function getPaidAdsOutcomeReport(args: {
     const firstReply = (inboundByContactId.get(contactId) ?? []).find(
       (message) => message.createdAt >= event.occurredAt,
     );
-    const booked = (appointmentsByContactId.get(contactId) ?? []).some(
+    const bookedFromEvent = (bookedAtByContactId.get(contactId) ?? []).some(
+      (bookedAt) => new Date(bookedAt) >= event.occurredAt,
+    );
+    const bookedFromRecord = (appointmentsByContactId.get(contactId) ?? []).some(
       (appointment) => appointment.createdAt >= event.occurredAt,
     );
+    const booked = bookedFromEvent || bookedFromRecord;
     const qualified =
       (lead?.status ?? "") === "qualified" ||
       (lead?.status ?? "") === "booked" ||

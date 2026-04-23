@@ -98,6 +98,7 @@ Seeded proof evidence (2026-04-23):
 - recorded one spend entry (`USD 125`) and produced one attribution ROI row (`facebook_ads` + unique proof UTM campaign)
 - proof script now prints an explicit schema-sync hint when Module 4 columns are missing and uses unique campaign tagging to keep repeated proof runs deterministic
 - paid-ads audience suppression now uses whole-word opt-out keyword matching to avoid false positives from embedded text fragments, with focused database regression tests
+- paid-ads booked outcomes now prefer `appointment.booked` events (with appointment-record fallback) for more reliable attribution reporting
 
 ## Module 5 - Sales Enablement
 
