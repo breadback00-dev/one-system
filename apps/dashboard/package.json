@@ -6,6 +6,7 @@
     "dev": "dotenv -e ../../.env -- next dev",
     "build": "dotenv -e ../../.env -- next build",
     "start": "dotenv -e ../../.env -- next start",
+    "test": "tsx app/reactivation-feedback.test.ts",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "format": "echo dashboard format step TBD"
