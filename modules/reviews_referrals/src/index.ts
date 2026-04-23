@@ -7,10 +7,8 @@ import {
   type ReviewResponseConfidence,
 } from "@one-system/ai";
 import {
-  classifyReviewReferralReplySignals,
   createQueuedOutboundMessageEvent,
   createReviewReferralSourceCapturedEvent,
-  extractReviewReferralSourceDetails,
   type ReviewReferralSourceCapturedPayload,
 } from "@one-system/domain";
 import {
@@ -21,6 +19,7 @@ import {
   getReviewRequestCandidates,
   type ReviewRequestCandidate,
 } from "@one-system/database";
+import { evaluateReviewsReferralsReplyRouting } from "./routing";
 
 export const reviewsReferralsWorkflow = {
   key: "reviews_referrals.post-visit-request",
@@ -457,17 +456,6 @@ export async function routeReviewsReferralsReply(
   }
 
   const normalizedMessage = normalizeFreeText(input.messageBody);
-  const referralSourceDetails = extractReviewReferralSourceDetails(
-    input.messageBody,
-  );
-  const referredName = referralSourceDetails.referredName;
-  const referredContact = referralSourceDetails.referredContact;
-  const referralSourceCaptureConfidence =
-    referralSourceDetails.captureConfidence;
-  const feedbackSignals = classifyReviewReferralReplySignals(input.messageBody);
-  const promoterFeedback = feedbackSignals.promoter;
-  const recoveryFeedback = feedbackSignals.recovery;
-  const referralIntentFeedback = feedbackSignals.referralIntent;
   const recentReferralFollowUps = await getRecentQueuedMessagesForReason({
     workspaceId: input.workspaceId,
     reason: REFERRAL_FOLLOW_UP_REASON,
@@ -476,13 +464,15 @@ export async function routeReviewsReferralsReply(
   const hasRecentReferralFollowUp = recentReferralFollowUps.some(
     (event) => event.contactId === input.contactId,
   );
-  const confidenceEligibleForCapture =
-    referralSourceCaptureConfidence === "high" ||
-    referralSourceCaptureConfidence === "medium" ||
-    hasRecentReferralFollowUp;
-  const canCaptureReferralSource = Boolean(referredName || referredContact) &&
-    (referralIntentFeedback || hasRecentReferralFollowUp) &&
-    confidenceEligibleForCapture;
+  const routingEvaluation = evaluateReviewsReferralsReplyRouting({
+    messageBody: input.messageBody,
+    hasRecentReferralFollowUp,
+  });
+  const referredName = routingEvaluation.referredName;
+  const referredContact = routingEvaluation.referredContact;
+  const referralSourceCaptureConfidence =
+    routingEvaluation.referralSourceCaptureConfidence;
+  const canCaptureReferralSource = routingEvaluation.canCaptureReferralSource;
   let capturedReferralSourceEvent:
     | ReturnType<typeof createReviewReferralSourceCapturedEvent>
     | undefined;
@@ -522,25 +512,26 @@ export async function routeReviewsReferralsReply(
     }
   }
 
-  const followUp = recoveryFeedback
+  const followUp =
+    routingEvaluation.followUpStatus === "queued_recovery_follow_up"
       ? {
           status: "queued_recovery_follow_up" as const,
           reason: RECOVERY_FOLLOW_UP_REASON,
           message: getRecoveryFollowUpMessage(),
         }
-      : referralIntentFeedback
+      : routingEvaluation.followUpStatus === "queued_referral_follow_up"
         ? {
             status: "queued_referral_follow_up" as const,
             reason: REFERRAL_FOLLOW_UP_REASON,
             message: getReferralFollowUpMessage(),
           }
-        : promoterFeedback
+        : routingEvaluation.followUpStatus === "queued_promoter_follow_up"
           ? {
               status: "queued_promoter_follow_up" as const,
               reason: PROMOTER_FOLLOW_UP_REASON,
               message: getPromoterFollowUpMessage(),
             }
-      : null;
+          : null;
 
   if (!followUp) {
     if (capturedReferralSourceEvent) {

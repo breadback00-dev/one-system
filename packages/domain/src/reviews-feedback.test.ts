@@ -100,6 +100,14 @@ function testSourceExtractionRejectsStopWordLeadingName() {
   assert.equal(details.captureConfidence, "high");
 }
 
+function testSourceExtractionRejectsSentencePrefixAsName() {
+  const details = extractReviewReferralSourceDetails(
+    "I can refer jordan, if that helps.",
+  );
+
+  assert.equal(details.referredName, undefined);
+}
+
 function run() {
   testPromoterOnlySignal();
   testRecoveryOnlySignal();
@@ -110,6 +118,7 @@ function run() {
   testSourceExtractionMediumConfidenceFromExplicitName();
   testSourceExtractionLowConfidenceFromLeadingName();
   testSourceExtractionRejectsStopWordLeadingName();
+  testSourceExtractionRejectsSentencePrefixAsName();
   console.log("[domain] review feedback signal tests passed");
 }
 

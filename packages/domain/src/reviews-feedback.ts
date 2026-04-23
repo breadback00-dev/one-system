@@ -73,7 +73,7 @@ function toDisplayName(name: string): string {
 
 function extractExplicitReferralName(messageBody: string): string | undefined {
   const explicitMatch = messageBody.match(
-    /\b(?:name is|named|it's|its|called|friend is|friend's name is)\s+([a-z][a-z' -]{1,40}?)(?=\s*(?:$|[,.!?]|and\b|but\b|\+?\d|[A-Z0-9._%+-]+@))/i,
+    /\b(?:name is|named|it's|its|called|friend is|friend's name is)\s+([a-z][a-z' -]{1,40}?)(?=\s*(?:$|[,.!?]|and\b|but\b|at\b|\+?\d|[A-Z0-9._%+-]+@))/i,
   );
 
   if (explicitMatch?.[1]) {
@@ -85,6 +85,12 @@ function extractExplicitReferralName(messageBody: string): string | undefined {
 
 function extractLeadingReferralName(messageBody: string): string | undefined {
   const leadingStopWords = new Set([
+    "i",
+    "we",
+    "can",
+    "could",
+    "refer",
+    "someone",
     "my",
     "friend",
     "family",

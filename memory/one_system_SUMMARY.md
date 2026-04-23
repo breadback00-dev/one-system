@@ -100,6 +100,7 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 - Module 3 sentiment-signal regression tests now run in `@one-system/domain` during workspace `npm run test`
 - Module 3 referral-source extraction now assigns capture confidence and only auto-captures low-confidence name-only data when recent referral follow-up context exists
 - the dashboard now includes a Module 3 readiness checklist for eligible audience, campaign execution, inbound replies, follow-up routing, and referral source visibility
+- Module 3 reply routing now runs through a dedicated evaluation helper with module-level regression tests (`modules/reviews_referrals/src/routing.test.ts`)
 - roadmap and product spec module ordering are now aligned (Paid Ads before Sales Enablement)
 - module folders for all five product areas
 - canonical per-module execution plan in `docs/module-plans.md`
