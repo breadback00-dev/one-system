@@ -3,9 +3,10 @@ import "dotenv/config";
 import {
   createServer,
   type IncomingMessage,
+  type Server,
   type ServerResponse,
 } from "node:http";
-import { URL } from "node:url";
+import { URL, pathToFileURL } from "node:url";
 
 import {
   appendEvents,
@@ -858,17 +859,18 @@ async function processInboundMessage(
   });
 }
 
-const server = createServer(async (request, response) => {
-  try {
-    const requestUrl = new URL(
-      request.url ?? "/",
-      `http://${request.headers.host ?? "localhost"}`,
-    );
+export function createApiServer(): Server {
+  return createServer(async (request, response) => {
+    try {
+      const requestUrl = new URL(
+        request.url ?? "/",
+        `http://${request.headers.host ?? "localhost"}`,
+      );
 
-    if (request.method === "GET" && requestUrl.pathname === "/health") {
-      sendJson(response, 200, { ok: true, service: "api" });
-      return;
-    }
+      if (request.method === "GET" && requestUrl.pathname === "/health") {
+        sendJson(response, 200, { ok: true, service: "api" });
+        return;
+      }
 
     if (request.method === "GET" && requestUrl.pathname === "/events") {
       const events = await getRecentEvents();
@@ -1099,14 +1101,26 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    sendJson(response, 404, { error: "Not found." });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unexpected server error.";
-    sendJson(response, 400, { error: message });
-  }
-});
+      sendJson(response, 404, { error: "Not found." });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unexpected server error.";
+      sendJson(response, 400, { error: message });
+    }
+  });
+}
 
-server.listen(port, () => {
-  console.log(`[api] One System API listening on :${port}`);
-});
+function isMainModule() {
+  if (!process.argv[1]) {
+    return false;
+  }
+
+  return import.meta.url === pathToFileURL(process.argv[1]).href;
+}
+
+if (isMainModule()) {
+  const server = createApiServer();
+  server.listen(port, () => {
+    console.log(`[api] One System API listening on :${port}`);
+  });
+}
