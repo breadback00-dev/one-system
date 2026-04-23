@@ -1,6 +1,9 @@
 import { PrismaClient, type Prisma } from "@prisma/client";
 import { appConfig } from "@one-system/config";
-import { createReactivationFollowUpHandledEvent } from "@one-system/domain";
+import {
+  createReactivationFollowUpHandledEvent,
+  createReactivationImportCompletedEvent,
+} from "@one-system/domain";
 import type { Contact, Lead, Workspace } from "@one-system/domain";
 import type { DomainEvent } from "@one-system/domain";
 import type {
@@ -10,6 +13,7 @@ import type {
   MessageOutboundQueuedPayload,
   MessageSuppressedPayload,
   ReactivationFollowUpHandledPayload,
+  ReactivationImportCompletedPayload,
 } from "@one-system/domain";
 import type {
   ConversationThread,
@@ -564,6 +568,19 @@ export interface ReactivationImportResult {
   skippedRows: ReactivationImportSkippedRow[];
 }
 
+export interface ReactivationImportRecord {
+  eventId: string;
+  importedAt: string;
+  importedCount: number;
+  createdContactCount: number;
+  updatedContactCount: number;
+  staleLeadCount: number;
+  pastCustomerCount: number;
+  duplicateActivityCount: number;
+  skippedRowCount: number;
+  dryRun: boolean;
+}
+
 export async function getRecentLeadOverview(limit = 6): Promise<LeadOverviewItem[]> {
   const leads = await prisma.lead.findMany({
     orderBy: { createdAt: "desc" },
@@ -734,6 +751,28 @@ export async function importReactivationContacts(args: {
         },
       });
     }
+
+    const importCompletedEvent = createReactivationImportCompletedEvent({
+      workspaceId,
+      importedCount: staleLeadCount + pastCustomerCount,
+      createdContactCount,
+      updatedContactCount,
+      staleLeadCount,
+      pastCustomerCount,
+      duplicateActivityCount,
+      skippedRowCount: skippedRows.length,
+      dryRun,
+    });
+
+    await tx.event.create({
+      data: {
+        id: importCompletedEvent.id,
+        workspaceId: importCompletedEvent.workspaceId,
+        name: importCompletedEvent.name,
+        payload: importCompletedEvent.payload as unknown as Prisma.InputJsonValue,
+        occurredAt: importCompletedEvent.occurredAt,
+      },
+    });
   });
 
   return {
@@ -748,6 +787,37 @@ export async function importReactivationContacts(args: {
     skippedRowCount: skippedRows.length,
     skippedRows,
   };
+}
+
+export async function getRecentReactivationImports(args: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<ReactivationImportRecord[]> {
+  const events = await prisma.event.findMany({
+    where: {
+      workspaceId: args.workspaceId,
+      name: "reactivation.import_completed",
+    },
+    orderBy: { occurredAt: "desc" },
+    take: args.limit ?? 6,
+  });
+
+  return events.map((event) => {
+    const payload = event.payload as unknown as ReactivationImportCompletedPayload;
+
+    return {
+      eventId: event.id,
+      importedAt: payload.importedAt || event.occurredAt.toISOString(),
+      importedCount: payload.importedCount,
+      createdContactCount: payload.createdContactCount,
+      updatedContactCount: payload.updatedContactCount,
+      staleLeadCount: payload.staleLeadCount,
+      pastCustomerCount: payload.pastCustomerCount,
+      duplicateActivityCount: payload.duplicateActivityCount,
+      skippedRowCount: payload.skippedRowCount,
+      dryRun: payload.dryRun,
+    } satisfies ReactivationImportRecord;
+  });
 }
 
 export async function getAvailableBookingSlots(args: {

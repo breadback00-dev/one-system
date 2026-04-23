@@ -3,6 +3,7 @@ export type DomainEventName =
   | "lead.responded"
   | "lead.qualified"
   | "appointment.booked"
+  | "reactivation.import_completed"
   | "reactivation.follow_up_handled"
   | "message.inbound_received"
   | "message.outbound_queued"
@@ -58,6 +59,18 @@ export interface ReactivationFollowUpHandledPayload {
   contactId: string;
   handledAt: string;
   note?: string;
+}
+
+export interface ReactivationImportCompletedPayload {
+  importedCount: number;
+  createdContactCount: number;
+  updatedContactCount: number;
+  staleLeadCount: number;
+  pastCustomerCount: number;
+  duplicateActivityCount: number;
+  skippedRowCount: number;
+  dryRun: boolean;
+  importedAt: string;
 }
 
 export interface MessageOutboundQueuedPayload {

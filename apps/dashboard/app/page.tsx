@@ -6,6 +6,7 @@ import {
   getRecentReactivationRunSummaries,
   getRecentAppointmentOverview,
   getRecentConversationThreads,
+  getRecentReactivationImports,
   getRecentReactivationHandledItems,
   getDeliveryStatus,
   getRecentLeadOverview,
@@ -126,6 +127,7 @@ export default async function HomePage({
     reactivationSnapshot,
     reactivationRuns,
     reactivationQueue,
+    reactivationImports,
     reactivationHandledItems,
     recentLeads,
     recentAppointments,
@@ -157,6 +159,10 @@ export default async function HomePage({
     getReactivationActionQueue({
       workspaceId: "workspace_medspa_demo",
       limit: 8,
+    }),
+    getRecentReactivationImports({
+      workspaceId: "workspace_medspa_demo",
+      limit: 5,
     }),
     getRecentReactivationHandledItems({
       workspaceId: "workspace_medspa_demo",
@@ -588,6 +594,40 @@ export default async function HomePage({
                         </button>
                       </form>
                     </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </article>
+
+        <article className="panel timeline-panel">
+          <h2>Recent Reactivation Imports</h2>
+          <div className="list-block">
+            {reactivationImports.length === 0 ? (
+              <p>No reactivation imports recorded yet.</p>
+            ) : (
+              reactivationImports.map((importRecord) => (
+                <div className="list-row" key={importRecord.eventId}>
+                  <div>
+                    <strong>
+                      {importRecord.dryRun ? "Dry-run preview" : "CSV import"}
+                    </strong>
+                    <p>
+                      {importRecord.staleLeadCount} stale leads •{" "}
+                      {importRecord.pastCustomerCount} past customers
+                    </p>
+                    <p>
+                      {importRecord.createdContactCount} created •{" "}
+                      {importRecord.updatedContactCount} updated •{" "}
+                      {importRecord.skippedRowCount} skipped
+                    </p>
+                  </div>
+                  <div className="row-meta">
+                    <span className="pill">
+                      {importRecord.importedCount} ready
+                    </span>
+                    <time>{formatRelativeIso(importRecord.importedAt)}</time>
                   </div>
                 </div>
               ))

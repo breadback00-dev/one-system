@@ -22,6 +22,7 @@ Backend entrypoint for APIs, webhooks, background jobs, workflow orchestration, 
 - A qualification keyword in the inbound reply can now trigger `lead.qualified`.
 - A qualified lead now receives a booking-handoff message using `BOOKING_HANDOFF_URL`.
 - Reactivation reporting now traces queued outreach through later inbound replies, qualification events, and explicit `appointment.booked` signals for the same contact after the send.
+- Reactivation imports and dry runs emit `reactivation.import_completed` audit events for dashboard visibility.
 - Pending auto-follow-up messages for the lead-capture workflow are suppressed once the lead replies before delivery.
 - Repeat inbound replies do not keep re-emitting the same `lead.responded` side effect once the lead has already moved out of `new` or `contacted`.
 

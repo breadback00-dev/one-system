@@ -11,6 +11,7 @@ import type {
   MessageInboundReceivedPayload,
   MessageOutboundQueuedPayload,
   MessageSuppressedPayload,
+  ReactivationImportCompletedPayload,
   ReactivationFollowUpHandledPayload,
 } from "./events";
 import type { Appointment } from "./entities";
@@ -213,6 +214,38 @@ export function createReactivationFollowUpHandledEvent(args: {
       contactId: args.contactId,
       handledAt: handledAt.toISOString(),
       ...(args.note?.trim() ? { note: args.note.trim() } : {}),
+    },
+  };
+}
+
+export function createReactivationImportCompletedEvent(args: {
+  workspaceId: string;
+  importedCount: number;
+  createdContactCount: number;
+  updatedContactCount: number;
+  staleLeadCount: number;
+  pastCustomerCount: number;
+  duplicateActivityCount: number;
+  skippedRowCount: number;
+  dryRun: boolean;
+}): DomainEvent<ReactivationImportCompletedPayload> {
+  const importedAt = new Date();
+
+  return {
+    id: randomUUID(),
+    workspaceId: args.workspaceId,
+    name: "reactivation.import_completed",
+    occurredAt: importedAt,
+    payload: {
+      importedCount: args.importedCount,
+      createdContactCount: args.createdContactCount,
+      updatedContactCount: args.updatedContactCount,
+      staleLeadCount: args.staleLeadCount,
+      pastCustomerCount: args.pastCustomerCount,
+      duplicateActivityCount: args.duplicateActivityCount,
+      skippedRowCount: args.skippedRowCount,
+      dryRun: args.dryRun,
+      importedAt: importedAt.toISOString(),
     },
   };
 }
