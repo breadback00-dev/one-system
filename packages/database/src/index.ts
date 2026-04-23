@@ -608,6 +608,8 @@ export interface ReviewReferralOutcomeRecord {
   deliveredAt?: string;
   replied: boolean;
   repliedAt?: string;
+  latestReplyBody?: string;
+  latestReplyAt?: string;
   promoter: boolean;
   promoterAt?: string;
   referralIntent: boolean;
@@ -1696,6 +1698,7 @@ export async function getReviewReferralOutcomeReport(args: {
       (message) => message.createdAt >= event.occurredAt,
     );
     const firstReply = replies[0];
+    const latestReply = replies.length > 0 ? replies[replies.length - 1] : undefined;
     const promoterReply = replies.find((reply) => isPromoterSignal(reply.body));
     const referralReply = replies.find((reply) =>
       isReferralIntentSignal(reply.body),
@@ -1713,6 +1716,10 @@ export async function getReviewReferralOutcomeReport(args: {
       ...(deliveredAt ? { deliveredAt } : {}),
       replied: Boolean(firstReply),
       ...(firstReply ? { repliedAt: firstReply.createdAt.toISOString() } : {}),
+      ...(latestReply ? { latestReplyBody: latestReply.body } : {}),
+      ...(latestReply
+        ? { latestReplyAt: latestReply.createdAt.toISOString() }
+        : {}),
       promoter: Boolean(promoterReply),
       ...(promoterReply
         ? { promoterAt: promoterReply.createdAt.toISOString() }

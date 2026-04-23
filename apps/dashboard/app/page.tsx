@@ -467,6 +467,17 @@ export default async function HomePage({
                     <p>
                       {outcome.channel.toUpperCase()} • {outcome.destination}
                     </p>
+                    {outcome.latestReplyBody ? (
+                      <blockquote className="message-context">
+                        <span>
+                          Latest reply
+                          {outcome.latestReplyAt
+                            ? ` • ${formatRelativeIso(outcome.latestReplyAt)}`
+                            : ""}
+                        </span>
+                        <p>{outcome.latestReplyBody}</p>
+                      </blockquote>
+                    ) : null}
                   </div>
                   <div className="row-meta">
                     <span className="pill">
@@ -481,6 +492,23 @@ export default async function HomePage({
                               : "queued"}
                     </span>
                     <time>{formatRelativeIso(outcome.queuedAt)}</time>
+                    {outcome.latestReplyBody ? (
+                      <form action={generateReviewsResponseDraft}>
+                        <input
+                          name="customerFirstName"
+                          type="hidden"
+                          value={outcome.firstName}
+                        />
+                        <input
+                          name="customerMessage"
+                          type="hidden"
+                          value={outcome.latestReplyBody}
+                        />
+                        <button className="text-button" type="submit">
+                          Draft reply
+                        </button>
+                      </form>
+                    ) : null}
                   </div>
                 </div>
               ))
