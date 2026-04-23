@@ -125,16 +125,16 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 
 ## What Comes Next
 
-- continue Module 3 implementation slices
-- add stronger satisfaction gating and referral routing paths on inbound feedback
-- refine response-suggestion flow for operator-assisted review handling and link drafts to richer conversation context
+- keep Module 3 in validation/sign-off mode and only ship targeted hardening or bug-fix slices
+- capture any remaining Module 3 operator evidence in the seeded workspace without resetting seeded data
+- prepare a Plan Mode handoff only when explicitly approved to start Module 4
 - keep commits to meaningful module/capability checkpoints, not every small slice
 
 ## Immediate Next Step
 
 - keep Module 3 as active module and do not start Module 4 without explicit instruction
-- tighten review-response routing for positive vs negative sentiment replies
-- keep validating each Module 3 checkpoint with `npm run typecheck` and `npm run build`
+- keep validating each Module 3 checkpoint with `npm run typecheck`, `npm run build`, and `npm run test`
+- continue small operator-readiness hardening while preserving current seeded data state
 
 ## How To Resume
 

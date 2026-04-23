@@ -47,7 +47,7 @@ Operational note:
 
 ## Module 3 - Reviews + Referrals
 
-Status: In progress (active module).
+Status: Completed and verified; keep active until explicit module switch approval.
 
 Completed checkpoints:
 
@@ -57,13 +57,10 @@ Completed checkpoints:
 - operator response-draft generation from latest reply context
 - follow-up action visibility in outcomes
 - referral source capture events with dedupe and campaign/run-aware reporting
-
-Remaining checkpoints:
-
-- tighten satisfaction gating for ambiguous mixed-sentiment replies
-- improve referral-source extraction quality and confidence handling
-- expose referral-source captures in dashboard outcomes surfaces
-- add focused regression tests for routing and referral-source capture behavior
+- mixed-sentiment gating now routes ambiguous negative/positive feedback to recovery
+- referral-source extraction now includes confidence handling and stricter parser boundaries
+- dashboard now shows Module 3 readiness checks plus referral-source capture quality counts
+- focused regression tests now cover domain sentiment/source parsing and module routing decisions
 
 Exit criteria:
 
