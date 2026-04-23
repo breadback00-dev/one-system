@@ -518,6 +518,9 @@ export interface ReactivationActionItem {
 export interface ReactivationHandledRecord {
   queuedEventId: string;
   contactId: string;
+  firstName: string;
+  campaignKey?: string;
+  runId?: string;
   handledAt: string;
   note?: string;
 }
@@ -1181,6 +1184,67 @@ export async function markReactivationFollowUpHandled(args: {
       ...(args.note ? { note: args.note } : {}),
     }),
   ]);
+}
+
+export async function getRecentReactivationHandledItems(args: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<ReactivationHandledRecord[]> {
+  const handledEvents = await prisma.event.findMany({
+    where: {
+      workspaceId: args.workspaceId,
+      name: "reactivation.follow_up_handled",
+    },
+    orderBy: { occurredAt: "desc" },
+    take: args.limit ?? 8,
+  });
+
+  if (handledEvents.length === 0) {
+    return [];
+  }
+
+  const payloads = handledEvents.map((event) => ({
+    event,
+    payload: event.payload as unknown as ReactivationFollowUpHandledPayload,
+  }));
+  const contactIds = [...new Set(payloads.map(({ payload }) => payload.contactId))];
+  const queuedEventIds = [...new Set(payloads.map(({ payload }) => payload.queuedEventId))];
+  const [contacts, queuedEvents] = await Promise.all([
+    prisma.contact.findMany({
+      where: {
+        workspaceId: args.workspaceId,
+        id: { in: contactIds },
+      },
+    }),
+    prisma.event.findMany({
+      where: {
+        workspaceId: args.workspaceId,
+        id: { in: queuedEventIds },
+        name: "message.outbound_queued",
+      },
+    }),
+  ]);
+
+  const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
+  const queuedEventById = new Map(queuedEvents.map((event) => [event.id, event]));
+
+  return payloads.map(({ event, payload }) => {
+    const contact = contactById.get(payload.contactId);
+    const queuedEvent = queuedEventById.get(payload.queuedEventId);
+    const queuedPayload = queuedEvent?.payload as
+      | MessageOutboundQueuedPayload
+      | undefined;
+
+    return {
+      queuedEventId: payload.queuedEventId,
+      contactId: payload.contactId,
+      firstName: contact?.firstName ?? "Unknown",
+      ...(queuedPayload?.campaignKey ? { campaignKey: queuedPayload.campaignKey } : {}),
+      ...(queuedPayload?.runId ? { runId: queuedPayload.runId } : {}),
+      handledAt: payload.handledAt || event.occurredAt.toISOString(),
+      ...(payload.note ? { note: payload.note } : {}),
+    } satisfies ReactivationHandledRecord;
+  });
 }
 
 export async function recordOutboundMessage(args: {

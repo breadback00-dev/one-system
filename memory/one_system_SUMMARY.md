@@ -49,6 +49,7 @@ M1 - Platform Foundation
 - the dashboard now includes a Module 2 reactivation follow-up queue for replied and qualified contacts that are still unbooked
 - Module 2 queue items can now be marked handled from the dashboard through a `reactivation.follow_up_handled` event
 - Module 2 queue items can now be booked for a next-day default appointment from the dashboard, creating an `appointment.booked` event and clearing the queue item
+- the dashboard now shows recently handled Module 2 reactivation queue items with campaign/run context and handling notes
 - module folders for all five product areas
 - med spa selected as first implementation niche
 
@@ -74,7 +75,7 @@ M1 - Platform Foundation
 - generalize the minimal sequence capability into reusable step definitions and scheduling rules
 - expose response state and workflow outcomes more explicitly in the dashboard
 - deepen Reactivation with reply/booking tracking, richer segmentation rules, and clearer run reporting
-- deepen Module 2 operator actions with conversation context, handled-item audit visibility, and real scheduling availability
+- deepen Module 2 operator actions with conversation context and real scheduling availability
 
 ## How To Resume
 

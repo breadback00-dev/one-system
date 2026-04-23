@@ -5,6 +5,7 @@ import {
   getRecentReactivationRunSummaries,
   getRecentAppointmentOverview,
   getRecentConversationThreads,
+  getRecentReactivationHandledItems,
   getDeliveryStatus,
   getRecentLeadOverview,
   getRecentMessageTimeline,
@@ -52,6 +53,7 @@ export default async function HomePage() {
     reactivationSnapshot,
     reactivationRuns,
     reactivationQueue,
+    reactivationHandledItems,
     recentLeads,
     recentAppointments,
     recentMessages,
@@ -70,6 +72,10 @@ export default async function HomePage() {
     getReactivationActionQueue({
       workspaceId: "workspace_medspa_demo",
       limit: 8,
+    }),
+    getRecentReactivationHandledItems({
+      workspaceId: "workspace_medspa_demo",
+      limit: 6,
     }),
     getRecentLeadOverview(),
     getRecentAppointmentOverview(),
@@ -320,6 +326,32 @@ export default async function HomePage() {
                         </button>
                       </form>
                     </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </article>
+
+        <article className="panel timeline-panel">
+          <h2>Recently Handled Reactivation Items</h2>
+          <div className="list-block">
+            {reactivationHandledItems.length === 0 ? (
+              <p>No handled reactivation items recorded yet.</p>
+            ) : (
+              reactivationHandledItems.map((item) => (
+                <div className="list-row" key={`${item.queuedEventId}-${item.handledAt}`}>
+                  <div>
+                    <strong>{item.firstName}</strong>
+                    <p>
+                      {item.campaignKey ?? "reactivation-default"} • Run{" "}
+                      {(item.runId ?? "legacy-run").slice(0, 8)}
+                    </p>
+                    {item.note ? <p>{item.note}</p> : null}
+                  </div>
+                  <div className="row-meta">
+                    <span className="pill">handled</span>
+                    <time>{formatRelativeIso(item.handledAt)}</time>
                   </div>
                 </div>
               ))
