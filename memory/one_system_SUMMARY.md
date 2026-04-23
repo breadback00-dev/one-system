@@ -73,6 +73,7 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 - Module 2 now has a CRM dormant-contact sync adapter contract in `packages/integrations`, plus a static dev adapter that maps CRM records into reactivation import rows
 - Module 2 imports now emit `reactivation.import_completed` audit events and the dashboard shows recent import/dry-run history
 - Module 2 past-customer readiness now excludes contacts with recent or upcoming valid appointments
+- the dashboard now includes a Module 2 readiness checklist for imports, eligible audience, campaign execution, booking slots, and measurable outcomes
 - module folders for all five product areas
 - med spa selected as first implementation niche
 

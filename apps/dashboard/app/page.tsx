@@ -111,6 +111,56 @@ function getReactivationRunFeedback(
   };
 }
 
+function getModule2ReadinessChecks(args: {
+  importCount: number;
+  eligibleCount: number;
+  runCount: number;
+  bookingSlotCount: number;
+  queuedCount: number;
+  repliedCount: number;
+  bookedCount: number;
+}) {
+  return [
+    {
+      label: "Dormant list imported",
+      ready: args.importCount > 0,
+      detail:
+        args.importCount > 0
+          ? `${args.importCount} import or dry-run event recorded`
+          : "Run a CSV import or dry-run first",
+    },
+    {
+      label: "Audience ready",
+      ready: args.eligibleCount > 0,
+      detail:
+        args.eligibleCount > 0
+          ? `${args.eligibleCount} contacts currently eligible`
+          : "No eligible contacts in the default readiness preview",
+    },
+    {
+      label: "Campaign executed",
+      ready: args.runCount > 0 || args.queuedCount > 0,
+      detail:
+        args.runCount > 0
+          ? `${args.runCount} recent run groups visible`
+          : "Queue at least one reactivation campaign",
+    },
+    {
+      label: "Booking path available",
+      ready: args.bookingSlotCount > 0,
+      detail:
+        args.bookingSlotCount > 0
+          ? `${args.bookingSlotCount} generated booking slots available`
+          : "No booking slots are currently available",
+    },
+    {
+      label: "Outcomes measurable",
+      ready: args.queuedCount > 0 || args.repliedCount > 0 || args.bookedCount > 0,
+      detail: `${args.queuedCount} queued • ${args.repliedCount} replied • ${args.bookedCount} booked`,
+    },
+  ];
+}
+
 export default async function HomePage({
   searchParams,
 }: {
@@ -173,6 +223,15 @@ export default async function HomePage({
     getRecentMessageTimeline(),
     getRecentConversationThreads(),
   ]);
+  const module2ReadinessChecks = getModule2ReadinessChecks({
+    importCount: reactivationImports.length,
+    eligibleCount: defaultReactivationReadiness.eligibleCount,
+    runCount: reactivationRuns.length,
+    bookingSlotCount: reactivationBookingSlots.length,
+    queuedCount: reactivationSnapshot.queuedCount,
+    repliedCount: reactivationSnapshot.repliedCount,
+    bookedCount: reactivationSnapshot.bookedCount,
+  });
 
   return (
     <main className="page-shell">
@@ -463,6 +522,22 @@ export default async function HomePage({
               Queue campaign
             </button>
           </form>
+        </SectionCard>
+
+        <SectionCard title="Module 2 Readiness">
+          <div className="list-block">
+            {module2ReadinessChecks.map((check) => (
+              <div className="list-row" key={check.label}>
+                <div>
+                  <strong>{check.label}</strong>
+                  <p>{check.detail}</p>
+                </div>
+                <span className={`pill ${check.ready ? "ready" : "needs_attention"}`}>
+                  {check.ready ? "ready" : "needs attention"}
+                </span>
+              </div>
+            ))}
+          </div>
         </SectionCard>
       </section>
 

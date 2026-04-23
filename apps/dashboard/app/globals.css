@@ -448,6 +448,16 @@ h1 {
   border-color: rgba(55, 84, 110, 0.22);
 }
 
+.pill.ready {
+  background: rgba(104, 141, 78, 0.12);
+  border-color: rgba(104, 141, 78, 0.28);
+}
+
+.pill.needs_attention {
+  background: rgba(197, 139, 54, 0.14);
+  border-color: rgba(197, 139, 54, 0.3);
+}
+
 .text-button {
   cursor: pointer;
   border: 1px solid var(--line);
