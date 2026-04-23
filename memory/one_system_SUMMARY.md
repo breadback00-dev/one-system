@@ -74,6 +74,16 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 - Module 2 imports now emit `reactivation.import_completed` audit events and the dashboard shows recent import/dry-run history
 - Module 2 past-customer readiness now excludes contacts with recent or upcoming valid appointments
 - the dashboard now includes a Module 2 readiness checklist for imports, eligible audience, campaign execution, booking slots, and measurable outcomes
+- Module 2 follow-up queue actions now validate server-side actionability before booking/handling (no stale, already-booked, or already-handled queue mutations)
+- Module 2 queue booking now enforces operator-offered slot selection and rejects off-menu slot submissions
+- Module 2 mark-handled notes are length-capped to reduce oversized/tampered payload risk
+- Module 2 audience selection is now strict in API and dashboard actions (invalid `audienceSegment` values fail fast instead of silently defaulting)
+- Module 2 campaign keys are now normalized and validated (lowercase slug pattern) before readiness checks and queueing
+- Module 2 cooldown matching now compares campaign keys case-insensitively so legacy mixed-case keys still suppress repeats
+- Module 2 dashboard now shows explicit success/error notices for campaign queueing and queue booking/handled actions
+- Module 2 dashboard feedback parsing now lives in a shared utility with regression tests wired into the dashboard `test` script
+- local Module 2 proof run on 2026-04-23 seeded one live import (4 dormant contacts), queued one campaign run (4 queued), booked one queue item, and left three open queue items
+- local Module 2 readiness evidence now shows all five checklist checks as ready in the current demo workspace state
 - module folders for all five product areas
 - med spa selected as first implementation niche
 
@@ -85,18 +95,26 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 - split synchronous API concerns from async worker concerns
 - deepen Lead Capture + Instant Follow-Up first because it exercises the most platform surface area
 
+## Model Guidance
+
+- Use GPT-5.3 Codex for coding-heavy continuation: multi-file edits, TypeScript/Next/Prisma changes, debugging, verification, and meaningful commits.
+- Use GPT-5.4 for planning-heavy work: architecture tradeoffs, product direction, scope decisions, specs, docs strategy, and explanations before implementation.
+- In fresh coding threads, prefer GPT-5.3 Codex unless the immediate task is mostly planning or decision-making.
+- Switch from GPT-5.4 to GPT-5.3 Codex once the plan is clear and the next step is to edit files, run checks, or commit.
+- Switch from GPT-5.3 Codex to GPT-5.4 when the work gets ambiguous, module scope needs renegotiation, or there are multiple architecture/product paths.
+
 ## What Comes Next
 
 - continue Module 2 only
-- keep tightening Reactivation campaign controls and operator safety
-- add final readiness checks before declaring Module 2 usable enough
+- decide whether to keep current seeded Module 2 demo data or reset it before handoff
+- prepare final Module 2 closeout/signoff summary while staying on Module 2 unless explicitly switched
 - keep commits to meaningful module/capability checkpoints, not every small slice
 
 ## Immediate Next Step
 
-- review the latest Module 2 CSV import checkpoint if uncommitted work exists
-- continue Module 2 with final readiness/operator checks, not Module 3
-- if committing, batch the current Module 2 work into a meaningful checkpoint
+- keep Module 2 as active module and do not start Module 3 without explicit instruction
+- confirm with the user whether to preserve or reset seeded demo data in `workspace_medspa_demo`
+- if requested, produce the final Module 2 readiness/signoff handoff note from current evidence
 
 ## How To Resume
 
