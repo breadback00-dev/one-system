@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { isOptOutKeywordMessage } from "./index";
+import { isOptOutKeywordMessage } from "./opt-out";
 
 function testExactOptOutKeywords() {
   assert.equal(isOptOutKeywordMessage("STOP"), true);

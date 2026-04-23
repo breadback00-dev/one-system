@@ -23,13 +23,12 @@ import type {
   MessageTimelineItem,
   QueuedMessage,
 } from "@one-system/messaging";
+import { isOptOutKeywordMessage, OPT_OUT_KEYWORDS } from "./opt-out";
 
 export const DATABASE_SCHEMA_PATH = "packages/database/prisma/schema.prisma";
 const DEFAULT_WORKSPACE_ID = "workspace_medspa_demo";
 const PAID_ADS_NURTURE_REASON = "paid_ads.nurture";
 const PAID_ADS_NURTURE_FOLLOW_UP_REASON = "paid_ads.nurture.follow-up";
-const OPT_OUT_KEYWORDS = ["stop", "unsubscribe", "quit", "cancel", "end"] as const;
-const OPT_OUT_WORD_PATTERN = /\b(stop|unsubscribe|quit|cancel|end)\b/i;
 
 const globalForPrisma = globalThis as typeof globalThis & {
   oneSystemPrisma?: PrismaClient;
@@ -97,10 +96,6 @@ function getDefaultWorkspace(): Workspace {
 
 function normalizeOptional(value: string | undefined) {
   return value && value.length > 0 ? value : null;
-}
-
-export function isOptOutKeywordMessage(body: string): boolean {
-  return OPT_OUT_WORD_PATTERN.test(body);
 }
 
 function toOptionalNumber(value: Prisma.Decimal): number {
