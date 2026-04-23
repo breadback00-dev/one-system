@@ -71,13 +71,31 @@ Exit criteria:
 
 ## Module 4 - Paid Ads + Lead Nurturing
 
-Status: Not started.
+Status: Completed and verified in seeded local workspace; keep active until explicit module switch approval.
 
-Planned checkpoints:
+Completed checkpoints:
 
 - source attribution model and ingestion extensions
 - source-aware nurture sequences
 - ad-to-appointment attribution reporting
+
+Current implementation notes:
+
+- lead attribution now persists from lead intake through domain events and reporting surfaces
+- paid nurture now runs from a dedicated module package with readiness preview, cooldown checks, and two-step queueing
+- API now exposes paid-ads readiness, run, report, and spend-entry endpoints
+- dashboard now includes Module 4 outcomes, campaign controls, spend capture, and readiness checklist visibility
+- spend-backed ROI metrics (CPL/CPQ/CPB) are now computed in reporting by source and campaign
+
+Remaining checkpoint:
+
+- targeted hardening/sign-off only; prepare Module 5 handoff only when explicitly approved
+
+Seeded proof evidence (2026-04-23):
+
+- queued one paid nurture run (`queuedCount +1`, `queuedEventCount +2`) with readiness `ready`
+- processed one inbound reply and one qualification outcome (`replied +1`, `qualified +1`)
+- recorded one spend entry (`USD 125`) and produced one attribution ROI row (`facebook_ads` + `proof_campaign`)
 
 ## Module 5 - Sales Enablement
 

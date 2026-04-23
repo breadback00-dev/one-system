@@ -26,6 +26,13 @@ export interface LeadCreatedPayload {
   firstName: string;
   phone?: string;
   email?: string;
+  attribution?: {
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmTerm?: string;
+    utmContent?: string;
+  };
 }
 
 export interface LeadRespondedPayload {
@@ -89,12 +96,16 @@ export interface ReviewReferralSourceCapturedPayload {
 export interface MessageOutboundQueuedPayload {
   queuedEventId?: string;
   contactId: string;
+  leadId?: string;
   channel: "sms" | "email";
   destination: string;
   message: string;
   reason: string;
   campaignKey?: string;
   runId?: string;
+  source?: string;
+  utmSource?: string;
+  utmCampaign?: string;
   deliverAfter?: string;
 }
 

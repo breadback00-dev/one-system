@@ -1,8 +1,10 @@
 import {
   getDashboardFunnelSnapshot,
   getAvailableBookingSlots,
+  getPaidAdsOutcomeReport,
   getReactivationActionQueue,
   getReactivationOutcomeReport,
+  getRecentPaidAdsSpendEntries,
   getReviewReferralOutcomeReport,
   getRecentReactivationRunSummaries,
   getRecentAppointmentOverview,
@@ -18,9 +20,12 @@ import {
   bookReactivationItemAtSlot,
   generateReviewsResponseDraft,
   markReactivationItemHandled,
+  recordPaidAdsSpendEntry,
+  runPaidAdsCampaign,
   runReactivationCampaign,
   runReviewsReferralsCampaign,
 } from "./actions";
+import { previewPaidAdsRun } from "@one-system/paid-ads";
 import { previewReactivationRun } from "@one-system/reactivation";
 import { previewReviewsReferralsRun } from "@one-system/reviews-referrals";
 import {
@@ -34,6 +39,12 @@ import {
   getReviewsRunErrorMessage,
   getReviewsRunFeedback,
 } from "./reviews-referrals-feedback";
+import {
+  getPaidAdsRunErrorMessage,
+  getPaidAdsRunFeedback,
+  getPaidAdsSpendErrorMessage,
+  getPaidAdsSpendFeedback,
+} from "./paid-ads-feedback";
 
 const modules = [
   "Lead Capture + Instant Follow-Up",
@@ -101,6 +112,22 @@ function getReviewsReadinessLabel(status: string) {
   }
 
   return "Ready contacts are available for review/referral outreach.";
+}
+
+function getPaidAdsReadinessLabel(status: string) {
+  if (status === "no_candidates") {
+    return "No attributed leads are currently available for nurture.";
+  }
+
+  if (status === "cooldown_blocked") {
+    return "All matching leads were recently targeted and are in cooldown.";
+  }
+
+  if (status === "blocked_by_safety") {
+    return "Matching leads exist, but safety rules are preventing queueing.";
+  }
+
+  return "Ready attributed leads are available for nurture.";
 }
 
 function getReviewsDraftSentimentLabel(sentiment: string) {
@@ -246,6 +273,56 @@ function getModule3ReadinessChecks(args: {
   ];
 }
 
+function getModule4ReadinessChecks(args: {
+  eligibleCount: number;
+  queuedCount: number;
+  repliedCount: number;
+  qualifiedCount: number;
+  spendEntryCount: number;
+  spendAmount: number;
+  blockedBySafetyCount: number;
+}) {
+  return [
+    {
+      label: "Attributed audience ready",
+      ready: args.eligibleCount > 0,
+      detail:
+        args.eligibleCount > 0
+          ? `${args.eligibleCount} leads currently eligible`
+          : "No eligible attributed leads in the default readiness preview",
+    },
+    {
+      label: "Nurture run executed",
+      ready: args.queuedCount > 0,
+      detail:
+        args.queuedCount > 0
+          ? `${args.queuedCount} leads queued into paid nurture`
+          : "Queue at least one paid-ads nurture run",
+    },
+    {
+      label: "Outcome signal visible",
+      ready: args.repliedCount > 0 || args.qualifiedCount > 0,
+      detail: `${args.repliedCount} replied • ${args.qualifiedCount} qualified`,
+    },
+    {
+      label: "Spend tracking active",
+      ready: args.spendEntryCount > 0,
+      detail:
+        args.spendEntryCount > 0
+          ? `${args.spendEntryCount} spend entries recorded (${args.spendAmount.toFixed(2)} total)`
+          : "Record at least one spend entry to unlock ROI metrics",
+    },
+    {
+      label: "Safety checks in effect",
+      ready: args.blockedBySafetyCount > 0 || args.eligibleCount > 0,
+      detail:
+        args.blockedBySafetyCount > 0
+          ? `${args.blockedBySafetyCount} leads currently blocked by terminal, opt-out, or invalid destination checks`
+          : "No currently blocked leads in the latest readiness sample",
+    },
+  ];
+}
+
 export default async function HomePage({
   searchParams,
 }: {
@@ -262,14 +339,22 @@ export default async function HomePage({
   const reviewsDraftFeedback = getReviewsDraftFeedback(resolvedSearchParams);
   const reviewsDraftErrorMessage =
     getReviewsDraftErrorMessage(resolvedSearchParams);
+  const paidAdsRunFeedback = getPaidAdsRunFeedback(resolvedSearchParams);
+  const paidAdsRunErrorMessage = getPaidAdsRunErrorMessage(resolvedSearchParams);
+  const paidAdsSpendFeedback = getPaidAdsSpendFeedback(resolvedSearchParams);
+  const paidAdsSpendErrorMessage =
+    getPaidAdsSpendErrorMessage(resolvedSearchParams);
   const [
     deliveryStatus,
     funnelSnapshot,
     reactivationBookingSlots,
     defaultReactivationReadiness,
     defaultReviewsReadiness,
+    defaultPaidAdsReadiness,
     reactivationSnapshot,
     reviewsSnapshot,
+    paidAdsSnapshot,
+    paidAdsSpendEntries,
     reactivationRuns,
     reactivationQueue,
     reactivationImports,
@@ -300,6 +385,12 @@ export default async function HomePage({
       cooldownDays: 14,
       campaignKey: "reviews-referrals-default",
     }),
+    previewPaidAdsRun({
+      workspaceId: "workspace_medspa_demo",
+      limit: 25,
+      cooldownDays: 14,
+      campaignKey: "paid-ads-default",
+    }),
     getReactivationOutcomeReport({
       workspaceId: "workspace_medspa_demo",
       limit: 25,
@@ -307,6 +398,14 @@ export default async function HomePage({
     getReviewReferralOutcomeReport({
       workspaceId: "workspace_medspa_demo",
       limit: 25,
+    }),
+    getPaidAdsOutcomeReport({
+      workspaceId: "workspace_medspa_demo",
+      limit: 50,
+    }),
+    getRecentPaidAdsSpendEntries({
+      workspaceId: "workspace_medspa_demo",
+      limit: 6,
     }),
     getRecentReactivationRunSummaries({
       workspaceId: "workspace_medspa_demo",
@@ -357,6 +456,21 @@ export default async function HomePage({
     recoveryFollowUpQueuedCount: reviewsSnapshot.recoveryFollowUpQueuedCount,
     referralIntentCount: reviewsSnapshot.referralIntentCount,
     referralSourceCapturedCount: reviewsSnapshot.referralSourceCapturedCount,
+  });
+  const module4ReadinessChecks = getModule4ReadinessChecks({
+    eligibleCount: defaultPaidAdsReadiness.eligibleCount,
+    queuedCount: paidAdsSnapshot.queuedCount,
+    repliedCount: paidAdsSnapshot.repliedCount,
+    qualifiedCount: paidAdsSnapshot.qualifiedCount,
+    spendEntryCount: paidAdsSpendEntries.length,
+    spendAmount: paidAdsSpendEntries.reduce(
+      (sum, entry) => sum + entry.amount,
+      0,
+    ),
+    blockedBySafetyCount:
+      defaultPaidAdsReadiness.skippedTerminalCount +
+      defaultPaidAdsReadiness.skippedOptOutCount +
+      defaultPaidAdsReadiness.skippedInvalidDestinationCount,
   });
 
   return (
@@ -443,7 +557,9 @@ export default async function HomePage({
                   <div>
                     <strong>{lead.firstName}</strong>
                     <p>
-                      {lead.source} • {lead.contactChannel}
+                      {lead.source}
+                      {lead.utmCampaign ? ` (${lead.utmCampaign})` : ""} •{" "}
+                      {lead.contactChannel}
                     </p>
                   </div>
                   <div className="row-meta">
@@ -632,6 +748,121 @@ export default async function HomePage({
                         </button>
                       </form>
                     ) : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Paid Ads Outcomes">
+          <div className="stats-grid">
+            <div className="stat">
+              <span className="stat-label">Queued</span>
+              <strong>{paidAdsSnapshot.queuedCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Replied</span>
+              <strong>{paidAdsSnapshot.repliedCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Qualified</span>
+              <strong>{paidAdsSnapshot.qualifiedCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Booked</span>
+              <strong>{paidAdsSnapshot.bookedCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Spend</span>
+              <strong>
+                {paidAdsSnapshot.currency} {paidAdsSnapshot.spendAmount.toFixed(2)}
+              </strong>
+            </div>
+          </div>
+          <div className="mini-stats">
+            <div>
+              <span>Cost per lead</span>
+              <strong>
+                {paidAdsSnapshot.costPerLead
+                  ? `${paidAdsSnapshot.currency} ${paidAdsSnapshot.costPerLead.toFixed(2)}`
+                  : "n/a"}
+              </strong>
+            </div>
+            <div>
+              <span>Cost per qualified</span>
+              <strong>
+                {paidAdsSnapshot.costPerQualified
+                  ? `${paidAdsSnapshot.currency} ${paidAdsSnapshot.costPerQualified.toFixed(2)}`
+                  : "n/a"}
+              </strong>
+            </div>
+            <div>
+              <span>Cost per booking</span>
+              <strong>
+                {paidAdsSnapshot.costPerBooking
+                  ? `${paidAdsSnapshot.currency} ${paidAdsSnapshot.costPerBooking.toFixed(2)}`
+                  : "n/a"}
+              </strong>
+            </div>
+          </div>
+          <div className="list-block">
+            {paidAdsSnapshot.outcomes.length === 0 ? (
+              <p>No paid-ads nurture activity recorded yet.</p>
+            ) : (
+              paidAdsSnapshot.outcomes.slice(0, 4).map((outcome) => (
+                <div className="list-row" key={outcome.queuedEventId}>
+                  <div>
+                    <strong>{outcome.firstName}</strong>
+                    <p>
+                      {outcome.source}
+                      {outcome.utmCampaign ? ` (${outcome.utmCampaign})` : ""} •{" "}
+                      {outcome.destination}
+                    </p>
+                  </div>
+                  <div className="row-meta">
+                    <span className="pill">
+                      {outcome.booked
+                        ? "booked"
+                        : outcome.qualified
+                          ? "qualified"
+                          : outcome.replied
+                            ? "replied"
+                            : outcome.deliveredAt
+                              ? "delivered"
+                              : "queued"}
+                    </span>
+                    <time>{formatRelativeIso(outcome.queuedAt)}</time>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="list-block">
+            {paidAdsSnapshot.rows.length === 0 ? (
+              <p>No source performance rows yet.</p>
+            ) : (
+              paidAdsSnapshot.rows.slice(0, 4).map((row) => (
+                <div className="list-row" key={`${row.source}-${row.utmCampaign ?? "none"}`}>
+                  <div>
+                    <strong>{row.source}</strong>
+                    <p>{row.utmCampaign ? row.utmCampaign : "no campaign tag"}</p>
+                    <p>
+                      {row.leadCount} leads • {row.respondedCount} replied •{" "}
+                      {row.qualifiedCount} qualified • {row.bookedCount} booked
+                    </p>
+                  </div>
+                  <div className="row-meta">
+                    <span className="pill">
+                      {row.currency} {row.spendAmount.toFixed(2)}
+                    </span>
+                    <p>
+                      CPL {row.costPerLead ? row.costPerLead.toFixed(2) : "n/a"} •
+                      CPQ{" "}
+                      {row.costPerQualified
+                        ? row.costPerQualified.toFixed(2)
+                        : "n/a"}
+                    </p>
                   </div>
                 </div>
               ))
@@ -916,6 +1147,222 @@ export default async function HomePage({
           </form>
         </SectionCard>
 
+        <SectionCard title="Run Paid Ads Nurture">
+          {paidAdsRunFeedback ? (
+            <div className="notice-card">
+              <strong>Campaign run processed</strong>
+              <p>
+                {paidAdsRunFeedback.campaignKey} • Run{" "}
+                {paidAdsRunFeedback.runId.slice(0, 8)}
+              </p>
+              <p>{getPaidAdsReadinessLabel(paidAdsRunFeedback.readinessStatus)}</p>
+              <div className="mini-stats">
+                <div>
+                  <span>Candidates</span>
+                  <strong>{paidAdsRunFeedback.candidateCount}</strong>
+                </div>
+                <div>
+                  <span>Eligible</span>
+                  <strong>{paidAdsRunFeedback.eligibleCount}</strong>
+                </div>
+                <div>
+                  <span>Queued leads</span>
+                  <strong>{paidAdsRunFeedback.queuedCount}</strong>
+                </div>
+                <div>
+                  <span>Queued events</span>
+                  <strong>{paidAdsRunFeedback.queuedEventCount}</strong>
+                </div>
+              </div>
+              <div className="mini-stats">
+                <div>
+                  <span>Cooldown skips</span>
+                  <strong>{paidAdsRunFeedback.skippedCooldownCount}</strong>
+                </div>
+                <div>
+                  <span>Terminal skips</span>
+                  <strong>{paidAdsRunFeedback.skippedTerminalCount}</strong>
+                </div>
+                <div>
+                  <span>Opt-out skips</span>
+                  <strong>{paidAdsRunFeedback.skippedOptOutCount}</strong>
+                </div>
+                <div>
+                  <span>Invalid destination</span>
+                  <strong>{paidAdsRunFeedback.skippedInvalidDestinationCount}</strong>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {paidAdsRunErrorMessage ? (
+            <div className="notice-card notice-error">
+              <strong>Campaign run blocked</strong>
+              <p>{paidAdsRunErrorMessage}</p>
+              <p>Review the campaign inputs and try again.</p>
+            </div>
+          ) : null}
+          <p className="action-warning">
+            Queues source-aware SMS nurture for attributed leads while skipping
+            terminal-status, opt-out, invalid destination, and cooldown-blocked
+            contacts.
+          </p>
+          <div className="readiness-card">
+            <div>
+              <span className="stat-label">Default readiness</span>
+              <strong>
+                {getPaidAdsReadinessLabel(defaultPaidAdsReadiness.readinessStatus)}
+              </strong>
+              <p>
+                Previewing a 25-lead window with a 14-day cooldown before queueing
+                paid nurture.
+              </p>
+            </div>
+            <div className="mini-stats">
+              <div>
+                <span>Eligible</span>
+                <strong>{defaultPaidAdsReadiness.eligibleCount}</strong>
+              </div>
+              <div>
+                <span>Cooldown</span>
+                <strong>{defaultPaidAdsReadiness.skippedCooldownCount}</strong>
+              </div>
+              <div>
+                <span>Terminal</span>
+                <strong>{defaultPaidAdsReadiness.skippedTerminalCount}</strong>
+              </div>
+              <div>
+                <span>Opt-out</span>
+                <strong>{defaultPaidAdsReadiness.skippedOptOutCount}</strong>
+              </div>
+            </div>
+            {defaultPaidAdsReadiness.candidates.length > 0 ? (
+              <div className="preview-list">
+                <span className="stat-label">Ready audience preview</span>
+                {defaultPaidAdsReadiness.candidates.slice(0, 3).map((candidate) => (
+                  <div className="preview-row" key={candidate.leadId}>
+                    <strong>{candidate.firstName}</strong>
+                    <span>
+                      {candidate.source}
+                      {candidate.utmCampaign ? ` (${candidate.utmCampaign})` : ""} •{" "}
+                      {candidate.destination}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <form action={runPaidAdsCampaign} className="control-form">
+            <label>
+              Campaign key
+              <input defaultValue="paid-ads-default" name="campaignKey" type="text" />
+            </label>
+            <div className="form-grid">
+              <label>
+                Lead limit
+                <input defaultValue="25" min="1" max="200" name="limit" type="number" />
+              </label>
+              <label>
+                Cooldown days
+                <input
+                  defaultValue="14"
+                  min="1"
+                  max="90"
+                  name="cooldownDays"
+                  type="number"
+                />
+              </label>
+            </div>
+            <button className="text-button" type="submit">
+              Queue paid nurture
+            </button>
+          </form>
+        </SectionCard>
+
+        <SectionCard title="Record Paid Ad Spend">
+          {paidAdsSpendFeedback ? (
+            <div className="notice-card">
+              <strong>Spend entry recorded</strong>
+              <p>
+                {paidAdsSpendFeedback.source}
+                {paidAdsSpendFeedback.utmCampaign
+                  ? ` (${paidAdsSpendFeedback.utmCampaign})`
+                  : ""}
+              </p>
+              <p>
+                {paidAdsSpendFeedback.currency} {paidAdsSpendFeedback.amount} •{" "}
+                {paidAdsSpendFeedback.reportDate
+                  ? formatRelativeIso(paidAdsSpendFeedback.reportDate)
+                  : "date unavailable"}
+              </p>
+            </div>
+          ) : null}
+          {paidAdsSpendErrorMessage ? (
+            <div className="notice-card notice-error">
+              <strong>Spend entry blocked</strong>
+              <p>{paidAdsSpendErrorMessage}</p>
+            </div>
+          ) : null}
+          <p className="action-warning">
+            Logs daily spend by source and optional campaign so Module 4 ROI metrics
+            can compute cost per lead, qualified lead, and booking.
+          </p>
+          <form action={recordPaidAdsSpendEntry} className="control-form">
+            <label>
+              Source
+              <input defaultValue="facebook_ads" name="source" type="text" />
+            </label>
+            <div className="form-grid">
+              <label>
+                UTM source (optional)
+                <input defaultValue="facebook" name="utmSource" type="text" />
+              </label>
+              <label>
+                UTM campaign (optional)
+                <input defaultValue="" name="utmCampaign" type="text" />
+              </label>
+            </div>
+            <div className="form-grid">
+              <label>
+                Report date (ISO date or datetime)
+                <input
+                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  name="reportDate"
+                  type="text"
+                />
+              </label>
+              <label>
+                Amount
+                <input defaultValue="100" min="0.01" name="amount" step="0.01" type="number" />
+              </label>
+              <label>
+                Currency
+                <input defaultValue="USD" maxLength={3} name="currency" type="text" />
+              </label>
+            </div>
+            <button className="text-button" type="submit">
+              Record spend
+            </button>
+          </form>
+          <div className="list-block">
+            {paidAdsSpendEntries.length === 0 ? (
+              <p>No spend entries recorded yet.</p>
+            ) : (
+              paidAdsSpendEntries.map((entry) => (
+                <div className="list-row" key={entry.id}>
+                  <div>
+                    <strong>{entry.source}</strong>
+                    <p>
+                      {entry.utmCampaign ? entry.utmCampaign : "no campaign tag"} •{" "}
+                      {entry.currency} {entry.amount.toFixed(2)}
+                    </p>
+                  </div>
+                  <time>{formatRelativeIso(entry.reportDate)}</time>
+                </div>
+              ))
+            )}
+          </div>
+        </SectionCard>
+
         <SectionCard title="Draft Review Response">
           {reviewsDraftFeedback ? (
             <div className="notice-card">
@@ -986,6 +1433,22 @@ export default async function HomePage({
         <SectionCard title="Module 3 Readiness">
           <div className="list-block">
             {module3ReadinessChecks.map((check) => (
+              <div className="list-row" key={check.label}>
+                <div>
+                  <strong>{check.label}</strong>
+                  <p>{check.detail}</p>
+                </div>
+                <span className={`pill ${check.ready ? "ready" : "needs_attention"}`}>
+                  {check.ready ? "ready" : "needs attention"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Module 4 Readiness">
+          <div className="list-block">
+            {module4ReadinessChecks.map((check) => (
               <div className="list-row" key={check.label}>
                 <div>
                   <strong>{check.label}</strong>

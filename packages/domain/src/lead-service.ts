@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import type { CreateLeadInput, Contact, Lead } from "./entities";
+import type {
+  CreateLeadInput,
+  Contact,
+  Lead,
+  LeadAttribution,
+} from "./entities";
 import type {
   AppointmentBookedPayload,
   DomainEvent,
@@ -36,8 +41,37 @@ export interface CreateAppointmentResult {
   events: [DomainEvent<AppointmentBookedPayload>];
 }
 
+function normalizeLeadAttribution(
+  attribution: LeadAttribution | undefined,
+): LeadAttribution | undefined {
+  if (!attribution) {
+    return undefined;
+  }
+
+  const normalized: LeadAttribution = {
+    ...(attribution.utmSource?.trim()
+      ? { utmSource: attribution.utmSource.trim() }
+      : {}),
+    ...(attribution.utmMedium?.trim()
+      ? { utmMedium: attribution.utmMedium.trim() }
+      : {}),
+    ...(attribution.utmCampaign?.trim()
+      ? { utmCampaign: attribution.utmCampaign.trim() }
+      : {}),
+    ...(attribution.utmTerm?.trim()
+      ? { utmTerm: attribution.utmTerm.trim() }
+      : {}),
+    ...(attribution.utmContent?.trim()
+      ? { utmContent: attribution.utmContent.trim() }
+      : {}),
+  };
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
 export function createLead(input: CreateLeadInput): CreateLeadResult {
   const timestamp = new Date();
+  const attribution = normalizeLeadAttribution(input.attribution);
   const contact: Contact = {
     id: randomUUID(),
     workspaceId: input.workspaceId,
@@ -57,6 +91,7 @@ export function createLead(input: CreateLeadInput): CreateLeadResult {
     source: input.source.trim(),
     status: "new",
     createdAt: timestamp,
+    ...(attribution ? { attribution } : {}),
   };
 
   const leadCreatedEvent: DomainEvent<LeadCreatedPayload> = {
@@ -71,6 +106,7 @@ export function createLead(input: CreateLeadInput): CreateLeadResult {
       firstName: contact.firstName,
       ...(contact.phone ? { phone: contact.phone } : {}),
       ...(contact.email ? { email: contact.email } : {}),
+      ...(attribution ? { attribution } : {}),
     },
   };
 
@@ -125,12 +161,16 @@ export function createQueuedOutboundMessageEvent(args: {
   queuedEventId?: string;
   workspaceId: string;
   contactId: string;
+  leadId?: string;
   channel: "sms" | "email";
   destination: string;
   message: string;
   reason: string;
   campaignKey?: string;
   runId?: string;
+  source?: string;
+  utmSource?: string;
+  utmCampaign?: string;
   deliverAfter?: string;
 }): DomainEvent<MessageOutboundQueuedPayload> {
   return {
@@ -141,12 +181,16 @@ export function createQueuedOutboundMessageEvent(args: {
     payload: {
       ...(args.queuedEventId ? { queuedEventId: args.queuedEventId } : {}),
       contactId: args.contactId,
+      ...(args.leadId ? { leadId: args.leadId } : {}),
       channel: args.channel,
       destination: args.destination,
       message: args.message,
       reason: args.reason,
       ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
       ...(args.runId ? { runId: args.runId } : {}),
+      ...(args.source ? { source: args.source } : {}),
+      ...(args.utmSource ? { utmSource: args.utmSource } : {}),
+      ...(args.utmCampaign ? { utmCampaign: args.utmCampaign } : {}),
       ...(args.deliverAfter ? { deliverAfter: args.deliverAfter } : {}),
     },
   };

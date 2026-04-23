@@ -6,9 +6,9 @@ M1 - Platform Foundation
 
 ## Active Module
 
-Module 3 - Reviews + Referrals Automation
+Module 4 - Paid Ads + Lead Nurturing
 
-Stay on Module 3 until explicitly told to switch modules. Say clearly before starting any new module.
+Module 3 is complete. Stay on Module 4 until explicitly told to switch modules.
 
 ## What Exists
 
@@ -104,6 +104,19 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 - Module 3 outcomes now include referral-source capture quality counts (high/medium/low confidence) for operator monitoring
 - local Module 3 proof run on 2026-04-23 queued one post-visit request, processed one referral-intent reply, queued one referral follow-up, and captured one high-confidence referral source
 - local Module 3 readiness evidence on 2026-04-23 shows all five checklist checks as ready (`eligible=3`, `queued=1`, `replied=1`, `routingActions=1`, `capturedSources=1`)
+- leads now support first-class attribution fields (`utmSource`, `utmMedium`, `utmCampaign`, `utmTerm`, `utmContent`) from intake through persistence and events
+- Module 4 now has a real workspace package in `modules/paid_ads` with readiness preview and campaign queue execution logic
+- Module 4 paid nurture now runs as a source-aware two-step SMS sequence (immediate + delayed follow-up) with cooldown protection and contact dedupe
+- Module 4 readiness now enforces terminal-status, opt-out, invalid-destination, cooldown, and limit safety checks before queueing
+- Module 4 now has `GET /paid-ads/readiness`, `POST /paid-ads/run`, `GET /paid-ads/report`, and `POST /paid-ads/spend` API endpoints
+- paid ads outcomes now include attribution-aware reporting by source and campaign, including queued/delivered/replied/qualified/booked visibility
+- paid ads reporting now includes ROI metrics (cost per lead, cost per qualified, cost per booking) based on recorded spend
+- paid ads spend is now persisted as first-class records through `AdSpendEntry` with source/campaign/date/currency tracking
+- the dashboard now includes Module 4 outcomes visibility, paid nurture campaign controls, spend-entry controls, and a Module 4 readiness checklist
+- the integrations package now includes a paid ads performance sync adapter contract (`PaidAdsPerformanceSyncAdapter`)
+- Module 4 focused tests now run in `@one-system/paid-ads` during workspace `npm run test`
+- local Module 4 proof run on 2026-04-23 queued one paid nurture run, processed one reply, qualified one lead, and recorded one spend entry tied to source/campaign attribution
+- local Module 4 proof evidence on 2026-04-23 shows paid outcome deltas (`queued=+1`, `replied=+1`, `qualified=+1`, `booked=+0`, `spend=+125`) and one attribution ROI row (`facebook_ads` + `proof_campaign`)
 - roadmap and product spec module ordering are now aligned (Paid Ads before Sales Enablement)
 - module folders for all five product areas
 - canonical per-module execution plan in `docs/module-plans.md`
@@ -127,16 +140,16 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 
 ## What Comes Next
 
-- keep Module 3 in validation/sign-off mode and only ship targeted hardening or bug-fix slices
-- capture any remaining Module 3 operator evidence in the seeded workspace without resetting seeded data
-- prepare a Plan Mode handoff only when explicitly approved to start Module 4
+- keep Module 4 in validation/sign-off mode and only ship targeted hardening or bug-fix slices
+- ship targeted Module 4 hardening slices only if validation reveals concrete gaps
+- prepare a Plan Mode handoff only when explicitly approved to start Module 5
 - keep commits to meaningful module/capability checkpoints, not every small slice
 
 ## Immediate Next Step
 
-- keep Module 3 as active module and do not start Module 4 without explicit instruction
-- keep validating each Module 3 checkpoint with `npm run typecheck`, `npm run build`, and `npm run test`
-- continue small operator-readiness hardening while preserving current seeded data state
+- keep Module 4 as active module and do not start Module 5 without explicit instruction
+- keep validating each Module 4 checkpoint with `npm run typecheck`, `npm run build`, and `npm run test`
+- continue Module 4 hardening while preserving current seeded data state
 
 ## How To Resume
 
@@ -146,4 +159,4 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 4. Run `git status --short`
 5. Review uncommitted files for the active module before editing
 6. Run `npm run typecheck`
-7. Continue Module 3 only unless the user explicitly says to switch modules
+7. Continue Module 4 only unless the user explicitly says to switch modules

@@ -1,3 +1,3 @@
 # Paid Ads Module
 
-Lead source attribution, nurture sequences, ad-connected reporting, and ROI visibility.
+Lead source attribution, source-aware nurture sequences, and operator ROI visibility.

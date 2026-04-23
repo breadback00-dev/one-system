@@ -1,0 +1,19 @@
+{
+  "name": "@one-system/paid-ads",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@one-system/database": "0.1.0",
+    "@one-system/domain": "0.1.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx src/index.test.ts",
+    "proof:seeded": "dotenv -e ../../.env -- tsx src/proof-pass.ts"
+  }
+}

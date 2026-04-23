@@ -12,6 +12,7 @@ import {
   findContactByAddress,
   getDeliveryStatus,
   getMostRecentLeadForContact,
+  getPaidAdsOutcomeReport,
   getPendingWorkflowMessagesForContact,
   getReactivationOutcomeReport,
   getReviewReferralOutcomeReport,
@@ -19,6 +20,7 @@ import {
   importReactivationContacts,
   markLeadQualified,
   markLeadResponded,
+  recordPaidAdsSpend,
   recordInboundMessage,
   saveAppointmentTransaction,
   saveLeadTransaction,
@@ -38,6 +40,10 @@ import {
 } from "@one-system/domain";
 import type { InboundMessage } from "@one-system/messaging";
 import { appConfig } from "@one-system/config";
+import {
+  executePaidAdsRun,
+  previewPaidAdsRun,
+} from "@one-system/paid-ads";
 import {
   executeReactivationRun,
   previewReactivationRun,
@@ -66,6 +72,13 @@ interface LeadRequestBody {
   lastName?: string;
   email?: string;
   phone?: string;
+  attribution?: {
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmTerm?: string;
+    utmContent?: string;
+  };
 }
 
 interface InboundMessageBody {
@@ -99,6 +112,23 @@ interface ReviewsReferralsResponseDraftBody {
   customerFirstName?: string;
 }
 
+interface PaidAdsRunBody {
+  workspaceId?: string;
+  limit?: number;
+  cooldownDays?: number;
+  campaignKey?: string;
+}
+
+interface PaidAdsSpendBody {
+  workspaceId?: string;
+  reportDate?: string;
+  source?: string;
+  utmSource?: string;
+  utmCampaign?: string;
+  amount?: number;
+  currency?: string;
+}
+
 interface AppointmentRequestBody {
   workspaceId?: string;
   contactId?: string;
@@ -115,6 +145,13 @@ interface ReactivationReportQuery {
 }
 
 interface ReviewsReferralsReportQuery {
+  workspaceId: string;
+  campaignKey?: string;
+  runId?: string;
+  limit: number;
+}
+
+interface PaidAdsReportQuery {
   workspaceId: string;
   campaignKey?: string;
   runId?: string;
@@ -196,6 +233,23 @@ function validateLeadInput(body: LeadRequestBody): CreateLeadInput {
   const firstName = body.firstName?.trim();
   const email = body.email?.trim();
   const phone = body.phone?.trim();
+  const attribution = {
+    ...(body.attribution?.utmSource?.trim()
+      ? { utmSource: body.attribution.utmSource.trim() }
+      : {}),
+    ...(body.attribution?.utmMedium?.trim()
+      ? { utmMedium: body.attribution.utmMedium.trim() }
+      : {}),
+    ...(body.attribution?.utmCampaign?.trim()
+      ? { utmCampaign: body.attribution.utmCampaign.trim() }
+      : {}),
+    ...(body.attribution?.utmTerm?.trim()
+      ? { utmTerm: body.attribution.utmTerm.trim() }
+      : {}),
+    ...(body.attribution?.utmContent?.trim()
+      ? { utmContent: body.attribution.utmContent.trim() }
+      : {}),
+  };
 
   if (!source) {
     throw new Error("`source` is required.");
@@ -216,6 +270,7 @@ function validateLeadInput(body: LeadRequestBody): CreateLeadInput {
     ...(body.lastName?.trim() ? { lastName: body.lastName.trim() } : {}),
     ...(email ? { email } : {}),
     ...(phone ? { phone } : {}),
+    ...(Object.keys(attribution).length > 0 ? { attribution } : {}),
   };
 }
 
@@ -306,6 +361,24 @@ function validateReviewsReferralsRunInput(body: ReviewsReferralsRunBody) {
   return {
     workspaceId,
     completedDaysAgo,
+    limit,
+    cooldownDays,
+    campaignKey,
+  };
+}
+
+function validatePaidAdsRunInput(body: PaidAdsRunBody) {
+  const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
+  const limit = Number.isFinite(body.limit)
+    ? Math.max(1, Math.min(200, Math.floor(body.limit as number)))
+    : 25;
+  const cooldownDays = Number.isFinite(body.cooldownDays)
+    ? Math.max(1, Math.min(90, Math.floor(body.cooldownDays as number)))
+    : 14;
+  const campaignKey = body.campaignKey?.trim() || "paid-ads-default";
+
+  return {
+    workspaceId,
     limit,
     cooldownDays,
     campaignKey,
@@ -519,6 +592,29 @@ function validateReviewsReferralsReadinessQuery(requestUrl: URL) {
   };
 }
 
+function validatePaidAdsReadinessQuery(requestUrl: URL) {
+  const limit = Number.parseInt(requestUrl.searchParams.get("limit") ?? "25", 10);
+  const cooldownDays = Number.parseInt(
+    requestUrl.searchParams.get("cooldownDays") ?? "14",
+    10,
+  );
+
+  return {
+    workspaceId:
+      requestUrl.searchParams.get("workspaceId")?.trim() ||
+      "workspace_medspa_demo",
+    limit: Number.isFinite(limit)
+      ? Math.max(1, Math.min(200, Math.floor(limit)))
+      : 25,
+    cooldownDays: Number.isFinite(cooldownDays)
+      ? Math.max(1, Math.min(90, Math.floor(cooldownDays)))
+      : 14,
+    campaignKey:
+      requestUrl.searchParams.get("campaignKey")?.trim() ||
+      "paid-ads-default",
+  };
+}
+
 function validateAppointmentInput(body: AppointmentRequestBody) {
   const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
   const contactId = body.contactId?.trim();
@@ -587,6 +683,51 @@ function validateReviewsReferralsReportQuery(
     ...(campaignKey ? { campaignKey } : {}),
     ...(runId ? { runId } : {}),
     limit,
+  };
+}
+
+function validatePaidAdsReportQuery(requestUrl: URL): PaidAdsReportQuery {
+  const workspaceId =
+    requestUrl.searchParams.get("workspaceId")?.trim() || "workspace_medspa_demo";
+  const campaignKey = requestUrl.searchParams.get("campaignKey")?.trim() || undefined;
+  const runId = requestUrl.searchParams.get("runId")?.trim() || undefined;
+  const limitParam = requestUrl.searchParams.get("limit");
+  const parsedLimit = limitParam ? Number.parseInt(limitParam, 10) : Number.NaN;
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.max(1, Math.min(250, parsedLimit))
+    : 100;
+
+  return {
+    workspaceId,
+    ...(campaignKey ? { campaignKey } : {}),
+    ...(runId ? { runId } : {}),
+    limit,
+  };
+}
+
+function validatePaidAdsSpendInput(body: PaidAdsSpendBody) {
+  const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
+  const reportDate = body.reportDate?.trim() || new Date().toISOString();
+  const source = body.source?.trim();
+  const amount = Number(body.amount);
+  const currency = body.currency?.trim() || "USD";
+
+  if (!source) {
+    throw new Error("`source` is required.");
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("`amount` must be a positive number.");
+  }
+
+  return {
+    workspaceId,
+    reportDate,
+    source,
+    ...(body.utmSource?.trim() ? { utmSource: body.utmSource.trim() } : {}),
+    ...(body.utmCampaign?.trim() ? { utmCampaign: body.utmCampaign.trim() } : {}),
+    amount,
+    currency,
   };
 }
 
@@ -758,6 +899,13 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && requestUrl.pathname === "/paid-ads/report") {
+      const query = validatePaidAdsReportQuery(requestUrl);
+      const report = await getPaidAdsOutcomeReport(query);
+      sendJson(response, 200, report);
+      return;
+    }
+
     if (
       request.method === "GET" &&
       requestUrl.pathname === "/reactivation/readiness"
@@ -774,6 +922,16 @@ const server = createServer(async (request, response) => {
     ) {
       const query = validateReviewsReferralsReadinessQuery(requestUrl);
       const readiness = await previewReviewsReferralsRun(query);
+      sendJson(response, 200, readiness);
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/paid-ads/readiness"
+    ) {
+      const query = validatePaidAdsReadinessQuery(requestUrl);
+      const readiness = await previewPaidAdsRun(query);
       sendJson(response, 200, readiness);
       return;
     }
@@ -878,6 +1036,22 @@ const server = createServer(async (request, response) => {
       const body = await readJsonBody<ReviewsReferralsRunBody>(request);
       const input = validateReviewsReferralsRunInput(body);
       const result = await executeReviewsReferralsRun(input);
+      sendJson(response, 201, result);
+      return;
+    }
+
+    if (request.method === "POST" && requestUrl.pathname === "/paid-ads/run") {
+      const body = await readJsonBody<PaidAdsRunBody>(request);
+      const input = validatePaidAdsRunInput(body);
+      const result = await executePaidAdsRun(input);
+      sendJson(response, 201, result);
+      return;
+    }
+
+    if (request.method === "POST" && requestUrl.pathname === "/paid-ads/spend") {
+      const body = await readJsonBody<PaidAdsSpendBody>(request);
+      const input = validatePaidAdsSpendInput(body);
+      const result = await recordPaidAdsSpend(input);
       sendJson(response, 201, result);
       return;
     }

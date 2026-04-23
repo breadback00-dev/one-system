@@ -11,6 +11,12 @@ import {
   getReviewsRunErrorMessage,
   getReviewsRunFeedback,
 } from "./reviews-referrals-feedback";
+import {
+  getPaidAdsRunErrorMessage,
+  getPaidAdsRunFeedback,
+  getPaidAdsSpendErrorMessage,
+  getPaidAdsSpendFeedback,
+} from "./paid-ads-feedback";
 
 function testReactivationRunFeedbackQueued() {
   const feedback = getReactivationRunFeedback({
@@ -133,6 +139,53 @@ function testReviewsDraftErrorFallback() {
   assert.equal(error, "Unable to generate a reviews/referrals response draft.");
 }
 
+function testPaidAdsRunFeedbackQueued() {
+  const feedback = getPaidAdsRunFeedback({
+    paidAdsRun: "queued",
+    campaignKey: "paid-ads-q3",
+    runId: "run-paid",
+    queuedCount: "3",
+    queuedEventCount: "6",
+  });
+
+  assert.ok(feedback, "Expected queued paid ads run feedback to be present.");
+  assert.equal(feedback.campaignKey, "paid-ads-q3");
+  assert.equal(feedback.runId, "run-paid");
+  assert.equal(feedback.queuedCount, "3");
+  assert.equal(feedback.queuedEventCount, "6");
+}
+
+function testPaidAdsRunErrorFallback() {
+  const error = getPaidAdsRunErrorMessage({
+    paidAdsRun: "error",
+  });
+
+  assert.equal(error, "Unable to queue the paid ads nurture campaign.");
+}
+
+function testPaidAdsSpendFeedbackRecorded() {
+  const feedback = getPaidAdsSpendFeedback({
+    paidAdsSpend: "recorded",
+    paidAdsSpendSource: "facebook_ads",
+    paidAdsSpendAmount: "125",
+    paidAdsSpendCurrency: "USD",
+    paidAdsSpendDate: "2026-04-23T00:00:00.000Z",
+  });
+
+  assert.ok(feedback, "Expected paid ads spend feedback to be present.");
+  assert.equal(feedback.source, "facebook_ads");
+  assert.equal(feedback.amount, "125");
+  assert.equal(feedback.currency, "USD");
+}
+
+function testPaidAdsSpendErrorFallback() {
+  const error = getPaidAdsSpendErrorMessage({
+    paidAdsSpend: "error",
+  });
+
+  assert.equal(error, "Unable to record paid ads spend.");
+}
+
 function run() {
   testReactivationRunFeedbackQueued();
   testReactivationRunFeedbackNotQueued();
@@ -145,6 +198,10 @@ function run() {
   testReviewsDraftFeedbackReady();
   testReviewsDraftFeedbackNotReady();
   testReviewsDraftErrorFallback();
+  testPaidAdsRunFeedbackQueued();
+  testPaidAdsRunErrorFallback();
+  testPaidAdsSpendFeedbackRecorded();
+  testPaidAdsSpendErrorFallback();
   console.log("[dashboard] feedback parser tests passed");
 }
 

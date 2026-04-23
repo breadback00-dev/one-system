@@ -24,6 +24,14 @@ export interface Contact {
   createdAt: Date;
 }
 
+export interface LeadAttribution {
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmTerm?: string;
+  utmContent?: string;
+}
+
 export interface Lead {
   id: string;
   workspaceId: string;
@@ -31,6 +39,7 @@ export interface Lead {
   source: string;
   status: LeadStatus;
   campaignId?: string;
+  attribution?: LeadAttribution;
   createdAt: Date;
 }
 
@@ -58,4 +67,5 @@ export interface CreateLeadInput {
   lastName?: string;
   email?: string;
   phone?: string;
+  attribution?: LeadAttribution;
 }

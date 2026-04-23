@@ -17,6 +17,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "npm run format --workspaces --if-present",
+    "proof:module3:seeded": "npm run proof:seeded --workspace @one-system/reviews-referrals",
+    "proof:module4:seeded": "npm run proof:seeded --workspace @one-system/paid-ads",
     "db:up": "docker compose -f infra/docker-compose.yml up -d postgres",
     "db:down": "docker compose -f infra/docker-compose.yml down",
     "db:generate": "npm run prisma:generate --workspace @one-system/database",

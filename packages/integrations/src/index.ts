@@ -60,6 +60,36 @@ export interface CrmDormantContactSyncAdapter {
   }): Promise<CrmSyncResult>;
 }
 
+export type PaidAdsProvider = "meta" | "google_ads" | "tiktok_ads" | "manual";
+
+export interface PaidAdsPerformanceRecord {
+  source: string;
+  reportDate: string;
+  spendAmount: number;
+  currency: string;
+  utmSource?: string;
+  utmCampaign?: string;
+  impressions?: number;
+  clicks?: number;
+  leads?: number;
+}
+
+export interface PaidAdsSyncResult {
+  provider: PaidAdsProvider;
+  workspaceId: string;
+  records: PaidAdsPerformanceRecord[];
+}
+
+export interface PaidAdsPerformanceSyncAdapter {
+  readonly provider: PaidAdsProvider;
+  syncPerformance(args: {
+    workspaceId: string;
+    dateFrom: string;
+    dateTo: string;
+    limit?: number;
+  }): Promise<PaidAdsSyncResult>;
+}
+
 export interface TwilioInboundWebhookPayload {
   Body?: string;
   From?: string;

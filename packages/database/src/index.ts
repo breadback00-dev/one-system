@@ -1,11 +1,11 @@
-import { PrismaClient, type Prisma } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { appConfig } from "@one-system/config";
 import {
   classifyReviewReferralReplySignals,
   createReactivationFollowUpHandledEvent,
   createReactivationImportCompletedEvent,
 } from "@one-system/domain";
-import type { Contact, Lead, Workspace } from "@one-system/domain";
+import type { Contact, Lead, LeadAttribution, Workspace } from "@one-system/domain";
 import type { DomainEvent } from "@one-system/domain";
 import type {
   AppointmentBookedPayload,
@@ -26,6 +26,9 @@ import type {
 
 export const DATABASE_SCHEMA_PATH = "packages/database/prisma/schema.prisma";
 const DEFAULT_WORKSPACE_ID = "workspace_medspa_demo";
+const PAID_ADS_NURTURE_REASON = "paid_ads.nurture";
+const PAID_ADS_NURTURE_FOLLOW_UP_REASON = "paid_ads.nurture.follow-up";
+const OPT_OUT_KEYWORDS = ["stop", "unsubscribe", "quit", "cancel", "end"] as const;
 
 const globalForPrisma = globalThis as typeof globalThis & {
   oneSystemPrisma?: PrismaClient;
@@ -95,6 +98,47 @@ function normalizeOptional(value: string | undefined) {
   return value && value.length > 0 ? value : null;
 }
 
+function toOptionalNumber(value: Prisma.Decimal): number {
+  return Number.parseFloat(value.toString());
+}
+
+function toIsoDateStart(value: string): Date {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Report date must be a valid ISO date.");
+  }
+
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function toCurrencyCode(value: string | undefined): string {
+  const normalized = (value ?? "USD").trim().toUpperCase();
+
+  if (!/^[A-Z]{3}$/.test(normalized)) {
+    throw new Error("Currency must be a 3-letter ISO code.");
+  }
+
+  return normalized;
+}
+
+function toLeadAttribution(record: {
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmTerm: string | null;
+  utmContent: string | null;
+}): LeadAttribution | undefined {
+  const attribution: LeadAttribution = {
+    ...(record.utmSource ? { utmSource: record.utmSource } : {}),
+    ...(record.utmMedium ? { utmMedium: record.utmMedium } : {}),
+    ...(record.utmCampaign ? { utmCampaign: record.utmCampaign } : {}),
+    ...(record.utmTerm ? { utmTerm: record.utmTerm } : {}),
+    ...(record.utmContent ? { utmContent: record.utmContent } : {}),
+  };
+
+  return Object.keys(attribution).length > 0 ? attribution : undefined;
+}
+
 function toWorkspaceRecord(record: {
   id: string;
   name: string;
@@ -136,8 +180,15 @@ function toLeadRecord(record: {
   source: string;
   status: string;
   campaignId: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmTerm: string | null;
+  utmContent: string | null;
   createdAt: Date;
 }): Lead {
+  const attribution = toLeadAttribution(record);
+
   return {
     id: record.id,
     workspaceId: record.workspaceId,
@@ -146,6 +197,7 @@ function toLeadRecord(record: {
     status: record.status as Lead["status"],
     createdAt: record.createdAt,
     ...(record.campaignId ? { campaignId: record.campaignId } : {}),
+    ...(attribution ? { attribution } : {}),
   };
 }
 
@@ -162,6 +214,30 @@ function toDomainEvent(record: {
     name: record.name as DomainEvent["name"],
     payload: record.payload,
     occurredAt: record.occurredAt,
+  };
+}
+
+function toPaidAdsSpendEntry(record: {
+  id: string;
+  workspaceId: string;
+  reportDate: Date;
+  source: string;
+  utmSource: string | null;
+  utmCampaign: string | null;
+  amount: Prisma.Decimal;
+  currency: string;
+  createdAt: Date;
+}): PaidAdsSpendEntry {
+  return {
+    id: record.id,
+    workspaceId: record.workspaceId,
+    reportDate: record.reportDate.toISOString(),
+    source: record.source,
+    ...(record.utmSource ? { utmSource: record.utmSource } : {}),
+    ...(record.utmCampaign ? { utmCampaign: record.utmCampaign } : {}),
+    amount: toOptionalNumber(record.amount),
+    currency: record.currency,
+    createdAt: record.createdAt.toISOString(),
   };
 }
 
@@ -206,6 +282,11 @@ export async function saveLeadTransaction(
         source: input.lead.source,
         status: input.lead.status,
         campaignId: normalizeOptional(input.lead.campaignId),
+        utmSource: normalizeOptional(input.lead.attribution?.utmSource),
+        utmMedium: normalizeOptional(input.lead.attribution?.utmMedium),
+        utmCampaign: normalizeOptional(input.lead.attribution?.utmCampaign),
+        utmTerm: normalizeOptional(input.lead.attribution?.utmTerm),
+        utmContent: normalizeOptional(input.lead.attribution?.utmContent),
       },
     });
 
@@ -417,6 +498,8 @@ export interface LeadOverviewItem {
   leadId: string;
   firstName: string;
   source: string;
+  utmSource?: string;
+  utmCampaign?: string;
   status: Lead["status"];
   contactChannel: string;
   createdAt: string;
@@ -467,9 +550,13 @@ export type ReactivationAudienceSegment = "all" | "stale_leads" | "past_customer
 
 export interface ReactivationSuppressionMatch {
   contactId: string;
+  leadId?: string;
   reason: string;
   campaignKey?: string;
   runId?: string;
+  source?: string;
+  utmSource?: string;
+  utmCampaign?: string;
   queuedAt: string;
 }
 
@@ -648,6 +735,96 @@ export interface ReviewReferralOutcomeReport {
   outcomes: ReviewReferralOutcomeRecord[];
 }
 
+export interface PaidAdsAudienceCandidate {
+  workspaceId: string;
+  leadId: string;
+  contactId: string;
+  firstName: string;
+  channel: "sms";
+  destination: string;
+  source: string;
+  status: Lead["status"];
+  utmSource?: string;
+  utmCampaign?: string;
+  createdAt: string;
+  skipReason?: "terminal_status" | "missing_sms_destination" | "opt_out";
+}
+
+export interface PaidAdsSpendEntry {
+  id: string;
+  workspaceId: string;
+  reportDate: string;
+  source: string;
+  utmSource?: string;
+  utmCampaign?: string;
+  amount: number;
+  currency: string;
+  createdAt: string;
+}
+
+export interface RecordPaidAdsSpendInput {
+  workspaceId: string;
+  reportDate: string;
+  source: string;
+  utmSource?: string;
+  utmCampaign?: string;
+  amount: number;
+  currency: string;
+}
+
+export interface PaidAdsOutcomeRecord {
+  queuedEventId: string;
+  leadId: string;
+  contactId: string;
+  firstName: string;
+  source: string;
+  utmSource?: string;
+  utmCampaign?: string;
+  channel: "sms";
+  destination: string;
+  campaignKey?: string;
+  runId?: string;
+  queuedAt: string;
+  deliveredAt?: string;
+  replied: boolean;
+  repliedAt?: string;
+  qualified: boolean;
+  booked: boolean;
+  terminal: boolean;
+}
+
+export interface PaidAdsPerformanceRow {
+  source: string;
+  utmCampaign?: string;
+  leadCount: number;
+  respondedCount: number;
+  qualifiedCount: number;
+  bookedCount: number;
+  spendAmount: number;
+  currency: string;
+  costPerLead?: number;
+  costPerQualified?: number;
+  costPerBooking?: number;
+}
+
+export interface PaidAdsOutcomeReport {
+  workspaceId: string;
+  campaignKey?: string;
+  runId?: string;
+  queuedCount: number;
+  deliveredCount: number;
+  repliedCount: number;
+  qualifiedCount: number;
+  bookedCount: number;
+  spendAmount: number;
+  currency: string;
+  costPerLead?: number;
+  costPerQualified?: number;
+  costPerBooking?: number;
+  rows: PaidAdsPerformanceRow[];
+  outcomes: PaidAdsOutcomeRecord[];
+}
+
 export async function getRecentLeadOverview(limit = 6): Promise<LeadOverviewItem[]> {
   const leads = await prisma.lead.findMany({
     orderBy: { createdAt: "desc" },
@@ -661,10 +838,141 @@ export async function getRecentLeadOverview(limit = 6): Promise<LeadOverviewItem
     leadId: lead.id,
     firstName: lead.contact.firstName,
     source: lead.source,
+    ...(lead.utmSource ? { utmSource: lead.utmSource } : {}),
+    ...(lead.utmCampaign ? { utmCampaign: lead.utmCampaign } : {}),
     status: lead.status as Lead["status"],
     contactChannel: lead.contact.phone ?? lead.contact.email ?? "unknown",
     createdAt: lead.createdAt.toISOString(),
   }));
+}
+
+export async function getPaidAdsAudienceCandidates(args: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<PaidAdsAudienceCandidate[]> {
+  const take = Math.max(25, Math.min((args.limit ?? 50) * 6, 500));
+  const leads = await prisma.lead.findMany({
+    where: {
+      workspaceId: args.workspaceId,
+    },
+    orderBy: { createdAt: "desc" },
+    take,
+    include: {
+      contact: {
+        include: {
+          appointments: {
+            where: {
+              outcome: {
+                notIn: ["cancelled", "no_show"],
+              },
+            },
+            orderBy: { startsAt: "desc" },
+            take: 3,
+          },
+        },
+      },
+    },
+  });
+
+  const contactIds = [...new Set(leads.map((lead) => lead.contactId))];
+  const optOutMessages = contactIds.length
+    ? await prisma.message.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          contactId: { in: contactIds },
+          direction: "inbound",
+          OR: OPT_OUT_KEYWORDS.map((keyword) => ({
+            body: { contains: keyword, mode: "insensitive" as const },
+          })),
+        },
+        select: {
+          contactId: true,
+        },
+      })
+    : [];
+  const optOutContactIds = new Set(optOutMessages.map((message) => message.contactId));
+
+  return leads.map((lead) => {
+    const hasTerminalStatus =
+      lead.status === "qualified" ||
+      lead.status === "booked" ||
+      lead.status === "won" ||
+      lead.status === "lost";
+    const hasActiveAppointment = lead.contact.appointments.some(
+      (appointment) => appointment.startsAt >= lead.createdAt,
+    );
+    const hasSmsDestination = Boolean(lead.contact.phone?.trim());
+    const optedOut = optOutContactIds.has(lead.contactId);
+    const skipReason = hasTerminalStatus || hasActiveAppointment
+      ? "terminal_status"
+      : !hasSmsDestination
+        ? "missing_sms_destination"
+        : optedOut
+          ? "opt_out"
+          : undefined;
+
+    return {
+      workspaceId: lead.workspaceId,
+      leadId: lead.id,
+      contactId: lead.contactId,
+      firstName: lead.contact.firstName,
+      channel: "sms",
+      destination: lead.contact.phone ?? "",
+      source: lead.source,
+      status: lead.status as Lead["status"],
+      ...(lead.utmSource ? { utmSource: lead.utmSource } : {}),
+      ...(lead.utmCampaign ? { utmCampaign: lead.utmCampaign } : {}),
+      createdAt: lead.createdAt.toISOString(),
+      ...(skipReason ? { skipReason } : {}),
+    } satisfies PaidAdsAudienceCandidate;
+  });
+}
+
+export async function recordPaidAdsSpend(
+  input: RecordPaidAdsSpendInput,
+): Promise<PaidAdsSpendEntry> {
+  await ensureWorkspace(input.workspaceId);
+  const source = input.source.trim();
+  if (!source) {
+    throw new Error("`source` is required for spend entry.");
+  }
+
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("`amount` must be a positive number.");
+  }
+
+  const reportDate = toIsoDateStart(input.reportDate);
+  const currency = toCurrencyCode(input.currency);
+
+  const record = await prisma.adSpendEntry.create({
+    data: {
+      workspaceId: input.workspaceId,
+      reportDate,
+      source,
+      utmSource: normalizeOptional(input.utmSource),
+      utmCampaign: normalizeOptional(input.utmCampaign),
+      amount: new Prisma.Decimal(amount),
+      currency,
+    },
+  });
+
+  return toPaidAdsSpendEntry(record);
+}
+
+export async function getRecentPaidAdsSpendEntries(args: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<PaidAdsSpendEntry[]> {
+  const records = await prisma.adSpendEntry.findMany({
+    where: {
+      workspaceId: args.workspaceId,
+    },
+    orderBy: [{ reportDate: "desc" }, { createdAt: "desc" }],
+    take: Math.max(1, Math.min(args.limit ?? 20, 100)),
+  });
+
+  return records.map(toPaidAdsSpendEntry);
 }
 
 export async function getRecentAppointmentOverview(
@@ -1375,9 +1683,13 @@ export async function getRecentQueuedMessagesForReason(args: {
       const payload = event.payload as unknown as MessageOutboundQueuedPayload;
       return {
         contactId: payload.contactId,
+        ...(payload.leadId ? { leadId: payload.leadId } : {}),
         reason: payload.reason,
         ...(payload.campaignKey ? { campaignKey: payload.campaignKey } : {}),
         ...(payload.runId ? { runId: payload.runId } : {}),
+        ...(payload.source ? { source: payload.source } : {}),
+        ...(payload.utmSource ? { utmSource: payload.utmSource } : {}),
+        ...(payload.utmCampaign ? { utmCampaign: payload.utmCampaign } : {}),
         queuedAt: event.occurredAt.toISOString(),
       } satisfies ReactivationSuppressionMatch;
     })
@@ -1625,6 +1937,286 @@ function matchesCampaignRunMetadata(args: {
   }
 
   return true;
+}
+
+function getCostMetric(totalSpend: number, count: number): number | undefined {
+  if (count <= 0) {
+    return undefined;
+  }
+
+  return Number((totalSpend / count).toFixed(2));
+}
+
+export async function getPaidAdsOutcomeReport(args: {
+  workspaceId: string;
+  campaignKey?: string;
+  runId?: string;
+  limit?: number;
+}): Promise<PaidAdsOutcomeReport> {
+  const queuedEvents = await prisma.event.findMany({
+    where: {
+      workspaceId: args.workspaceId,
+      name: "message.outbound_queued",
+    },
+    orderBy: { occurredAt: "desc" },
+    take: Math.max(1, Math.min((args.limit ?? 100) * 4, 500)),
+  });
+  const nurtureQueuedEvents = queuedEvents.filter((event) => {
+    const payload = event.payload as unknown as MessageOutboundQueuedPayload;
+    if (payload.reason !== PAID_ADS_NURTURE_REASON) {
+      return false;
+    }
+
+    return matchesCampaignRunMetadata({
+      campaignKey: payload.campaignKey,
+      runId: payload.runId,
+      ...(args.campaignKey ? { filterCampaignKey: args.campaignKey } : {}),
+      ...(args.runId ? { filterRunId: args.runId } : {}),
+    });
+  });
+
+  if (nurtureQueuedEvents.length === 0) {
+    return {
+      workspaceId: args.workspaceId,
+      ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
+      ...(args.runId ? { runId: args.runId } : {}),
+      queuedCount: 0,
+      deliveredCount: 0,
+      repliedCount: 0,
+      qualifiedCount: 0,
+      bookedCount: 0,
+      spendAmount: 0,
+      currency: "USD",
+      rows: [],
+      outcomes: [],
+    };
+  }
+
+  const queuedPayloads = nurtureQueuedEvents.map((event) => ({
+    event,
+    payload: event.payload as unknown as MessageOutboundQueuedPayload,
+  }));
+  const leadIds = [
+    ...new Set(
+      queuedPayloads
+        .map(({ payload }) => payload.leadId)
+        .filter((leadId): leadId is string => Boolean(leadId)),
+    ),
+  ];
+  const contactIds = [...new Set(queuedPayloads.map(({ payload }) => payload.contactId))];
+  const queuedEventIds = nurtureQueuedEvents.map((event) => event.id);
+  const earliestQueuedAt = nurtureQueuedEvents.reduce(
+    (earliest, event) =>
+      event.occurredAt < earliest ? event.occurredAt : earliest,
+    nurtureQueuedEvents[0]!.occurredAt,
+  );
+
+  const [leads, deliveredEvents, inboundMessages, appointments, spendEntries] =
+    await Promise.all([
+      leadIds.length > 0
+        ? prisma.lead.findMany({
+            where: {
+              workspaceId: args.workspaceId,
+              id: { in: leadIds },
+            },
+            include: {
+              contact: true,
+            },
+          })
+        : Promise.resolve([]),
+      prisma.event.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          name: "message.delivered",
+          occurredAt: {
+            gte: earliestQueuedAt,
+          },
+        },
+      }),
+      prisma.message.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          contactId: { in: contactIds },
+          direction: "inbound",
+          createdAt: {
+            gte: earliestQueuedAt,
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.appointment.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          contactId: { in: contactIds },
+          outcome: {
+            notIn: ["cancelled", "no_show"],
+          },
+          createdAt: {
+            gte: earliestQueuedAt,
+          },
+        },
+      }),
+      prisma.adSpendEntry.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          reportDate: {
+            gte: new Date(
+              Date.UTC(
+                earliestQueuedAt.getUTCFullYear(),
+                earliestQueuedAt.getUTCMonth(),
+                earliestQueuedAt.getUTCDate(),
+              ),
+            ),
+          },
+        },
+        orderBy: { reportDate: "desc" },
+      }),
+    ]);
+
+  const leadById = new Map(leads.map((lead) => [lead.id, lead]));
+  const queuedEventIdSet = new Set(queuedEventIds);
+  const deliveredByQueuedEventId = new Map(
+    deliveredEvents
+      .map((event) => event.payload as unknown as MessageDeliveredPayload)
+      .filter((payload) => queuedEventIdSet.has(payload.queuedEventId))
+      .map((payload) => [payload.queuedEventId, payload]),
+  );
+  const inboundByContactId = new Map<string, typeof inboundMessages>();
+  for (const message of inboundMessages) {
+    const messages = inboundByContactId.get(message.contactId) ?? [];
+    messages.push(message);
+    inboundByContactId.set(message.contactId, messages);
+  }
+  const appointmentsByContactId = new Map<string, typeof appointments>();
+  for (const appointment of appointments) {
+    const existing = appointmentsByContactId.get(appointment.contactId) ?? [];
+    existing.push(appointment);
+    appointmentsByContactId.set(appointment.contactId, existing);
+  }
+  const defaultCurrency =
+    spendEntries.find((entry) => entry.currency)?.currency ?? "USD";
+
+  const outcomes = queuedPayloads.map(({ event, payload }) => {
+    const lead = payload.leadId ? leadById.get(payload.leadId) : undefined;
+    const contactId = payload.contactId;
+    const utmSource = payload.utmSource ?? lead?.utmSource ?? undefined;
+    const utmCampaign = payload.utmCampaign ?? lead?.utmCampaign ?? undefined;
+    const delivered = deliveredByQueuedEventId.get(event.id);
+    const firstReply = (inboundByContactId.get(contactId) ?? []).find(
+      (message) => message.createdAt >= event.occurredAt,
+    );
+    const booked = (appointmentsByContactId.get(contactId) ?? []).some(
+      (appointment) => appointment.createdAt >= event.occurredAt,
+    );
+    const qualified =
+      (lead?.status ?? "") === "qualified" ||
+      (lead?.status ?? "") === "booked" ||
+      (lead?.status ?? "") === "won";
+    const terminal =
+      qualified || (lead?.status ?? "") === "lost" || booked;
+
+    return {
+      queuedEventId: event.id,
+      leadId: payload.leadId ?? "unknown-lead",
+      contactId,
+      firstName: lead?.contact.firstName ?? "Unknown",
+      source: payload.source ?? lead?.source ?? "unknown",
+      ...(utmSource ? { utmSource } : {}),
+      ...(utmCampaign ? { utmCampaign } : {}),
+      channel: "sms",
+      destination: payload.destination,
+      ...(payload.campaignKey ? { campaignKey: payload.campaignKey } : {}),
+      ...(payload.runId ? { runId: payload.runId } : {}),
+      queuedAt: event.occurredAt.toISOString(),
+      ...(delivered ? { deliveredAt: delivered.deliveredAt } : {}),
+      replied: Boolean(firstReply),
+      ...(firstReply ? { repliedAt: firstReply.createdAt.toISOString() } : {}),
+      qualified,
+      booked,
+      terminal,
+    } satisfies PaidAdsOutcomeRecord;
+  });
+
+  const rowsByKey = new Map<string, PaidAdsPerformanceRow>();
+  for (const outcome of outcomes) {
+    const rowKey = `${outcome.source}::${outcome.utmCampaign ?? ""}`;
+    const existing = rowsByKey.get(rowKey);
+    if (!existing) {
+      rowsByKey.set(rowKey, {
+        source: outcome.source,
+        ...(outcome.utmCampaign ? { utmCampaign: outcome.utmCampaign } : {}),
+        leadCount: 1,
+        respondedCount: outcome.replied ? 1 : 0,
+        qualifiedCount: outcome.qualified ? 1 : 0,
+        bookedCount: outcome.booked ? 1 : 0,
+        spendAmount: 0,
+        currency: defaultCurrency,
+      });
+      continue;
+    }
+
+    existing.leadCount += 1;
+    existing.respondedCount += outcome.replied ? 1 : 0;
+    existing.qualifiedCount += outcome.qualified ? 1 : 0;
+    existing.bookedCount += outcome.booked ? 1 : 0;
+  }
+
+  for (const spendEntry of spendEntries) {
+    const rowKey = `${spendEntry.source}::${spendEntry.utmCampaign ?? ""}`;
+    const row = rowsByKey.get(rowKey);
+    if (!row) {
+      continue;
+    }
+
+    row.spendAmount += toOptionalNumber(spendEntry.amount);
+    row.currency = spendEntry.currency;
+  }
+
+  const rows = [...rowsByKey.values()].map((row) => {
+    const costPerLead = getCostMetric(row.spendAmount, row.leadCount);
+    const costPerQualified = getCostMetric(
+      row.spendAmount,
+      row.qualifiedCount,
+    );
+    const costPerBooking = getCostMetric(row.spendAmount, row.bookedCount);
+
+    return {
+      ...row,
+      spendAmount: Number(row.spendAmount.toFixed(2)),
+      ...(costPerLead !== undefined ? { costPerLead } : {}),
+      ...(costPerQualified !== undefined ? { costPerQualified } : {}),
+      ...(costPerBooking !== undefined ? { costPerBooking } : {}),
+    };
+  });
+
+  const spendAmount = Number(
+    rows.reduce((sum, row) => sum + row.spendAmount, 0).toFixed(2),
+  );
+  const queuedCount = outcomes.length;
+  const qualifiedCount = outcomes.filter((outcome) => outcome.qualified).length;
+  const bookedCount = outcomes.filter((outcome) => outcome.booked).length;
+
+  const costPerLead = getCostMetric(spendAmount, queuedCount);
+  const costPerQualified = getCostMetric(spendAmount, qualifiedCount);
+  const costPerBooking = getCostMetric(spendAmount, bookedCount);
+
+  return {
+    workspaceId: args.workspaceId,
+    ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
+    ...(args.runId ? { runId: args.runId } : {}),
+    queuedCount,
+    deliveredCount: outcomes.filter((outcome) => outcome.deliveredAt).length,
+    repliedCount: outcomes.filter((outcome) => outcome.replied).length,
+    qualifiedCount,
+    bookedCount,
+    spendAmount,
+    currency: rows[0]?.currency ?? defaultCurrency,
+    ...(costPerLead !== undefined ? { costPerLead } : {}),
+    ...(costPerQualified !== undefined ? { costPerQualified } : {}),
+    ...(costPerBooking !== undefined ? { costPerBooking } : {}),
+    rows,
+    outcomes,
+  };
 }
 
 export async function getReviewReferralOutcomeReport(args: {
