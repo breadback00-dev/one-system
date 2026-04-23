@@ -81,11 +81,41 @@ export interface TriggerPostVisitReviewRequestResult {
   deliverAfter?: string;
 }
 
+export interface RouteReviewsReferralsReplyInput {
+  workspaceId: string;
+  contactId: string;
+  channel: "sms" | "email";
+  destination: string;
+  messageBody: string;
+  receivedAt?: string;
+  cooldownDays?: number;
+}
+
+export type RouteReviewsReferralsReplyStatus =
+  | "queued_promoter_follow_up"
+  | "queued_recovery_follow_up"
+  | "ignored_no_recent_request"
+  | "ignored_neutral"
+  | "cooldown_blocked";
+
+export interface RouteReviewsReferralsReplyResult {
+  ok: true;
+  status: RouteReviewsReferralsReplyStatus;
+  campaignKey?: string;
+  cooldownDays: number;
+  queuedCount: number;
+  queuedEventId?: string;
+}
+
 const DEFAULT_CAMPAIGN_KEY = "reviews-referrals-default";
 const DEFAULT_POST_VISIT_CAMPAIGN_KEY = "reviews-referrals-post-visit";
 const DEFAULT_POST_VISIT_COOLDOWN_DAYS = 30;
 const DEFAULT_POST_VISIT_DELAY_HOURS = 24;
+const DEFAULT_FEEDBACK_LOOKBACK_DAYS = 30;
+const DEFAULT_FEEDBACK_COOLDOWN_DAYS = 7;
 const MINIMUM_POST_VISIT_DELAY_MINUTES = 5;
+const PROMOTER_FOLLOW_UP_REASON = `${reviewsReferralsWorkflow.key}.promoter-follow-up`;
+const RECOVERY_FOLLOW_UP_REASON = `${reviewsReferralsWorkflow.key}.recovery-follow-up`;
 const CAMPAIGN_KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 function getReadinessStatus(args: {
@@ -142,6 +172,40 @@ function getDeliverAfterIso(args: {
   return (delayedFromVisit > minimumBuffer
     ? delayedFromVisit
     : minimumBuffer).toISOString();
+}
+
+function isPromoterFeedback(messageBody: string): boolean {
+  const normalized = messageBody.toLowerCase();
+
+  return (
+    /\b5\b/.test(normalized) ||
+    normalized.includes("great") ||
+    normalized.includes("amazing") ||
+    normalized.includes("awesome") ||
+    normalized.includes("love")
+  );
+}
+
+function isRecoveryFeedback(messageBody: string): boolean {
+  const normalized = messageBody.toLowerCase();
+
+  return (
+    /\b1\b/.test(normalized) ||
+    /\b2\b/.test(normalized) ||
+    /\b3\b/.test(normalized) ||
+    normalized.includes("bad") ||
+    normalized.includes("poor") ||
+    normalized.includes("unhappy") ||
+    normalized.includes("disappointed")
+  );
+}
+
+function getPromoterFollowUpMessage(): string {
+  return "Thank you for the 5-star feedback. If you're open to it, reply REVIEW and we'll send our public review link. If someone comes to mind who could benefit, reply REFER and we'll help with an intro offer.";
+}
+
+function getRecoveryFollowUpMessage(): string {
+  return "Thank you for the honest feedback. We're sorry your experience wasn't ideal. A team member will follow up shortly so we can make this right.";
 }
 
 async function evaluateReviewsReferralsReadiness(
@@ -340,6 +404,112 @@ export async function triggerPostVisitReviewRequest(
     contactId: candidate.contactId,
     queuedEventId: queuedEvent.id,
     deliverAfter,
+  };
+}
+
+export async function routeReviewsReferralsReply(
+  input: RouteReviewsReferralsReplyInput,
+): Promise<RouteReviewsReferralsReplyResult> {
+  const receivedAt = input.receivedAt ?? new Date().toISOString();
+  const cooldownDays = Math.max(
+    1,
+    Math.min(30, Math.floor(input.cooldownDays ?? DEFAULT_FEEDBACK_COOLDOWN_DAYS)),
+  );
+  const lookbackSince = new Date(
+    Date.now() - DEFAULT_FEEDBACK_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const recentReviewRequests = await getRecentQueuedMessagesForReason({
+    workspaceId: input.workspaceId,
+    reason: reviewsReferralsWorkflow.key,
+    since: lookbackSince,
+  });
+  const recentRequestForContact = recentReviewRequests.find(
+    (request) => request.contactId === input.contactId,
+  );
+
+  if (!recentRequestForContact) {
+    return {
+      ok: true,
+      status: "ignored_no_recent_request",
+      cooldownDays,
+      queuedCount: 0,
+    };
+  }
+
+  const followUp = isPromoterFeedback(input.messageBody)
+    ? {
+        status: "queued_promoter_follow_up" as const,
+        reason: PROMOTER_FOLLOW_UP_REASON,
+        message: getPromoterFollowUpMessage(),
+      }
+    : isRecoveryFeedback(input.messageBody)
+      ? {
+          status: "queued_recovery_follow_up" as const,
+          reason: RECOVERY_FOLLOW_UP_REASON,
+          message: getRecoveryFollowUpMessage(),
+        }
+      : null;
+
+  if (!followUp) {
+    return {
+      ok: true,
+      status: "ignored_neutral",
+      ...(recentRequestForContact.campaignKey
+        ? { campaignKey: recentRequestForContact.campaignKey }
+        : {}),
+      cooldownDays,
+      queuedCount: 0,
+    };
+  }
+
+  const recentFollowUps = await getRecentQueuedMessagesForReason({
+    workspaceId: input.workspaceId,
+    reason: followUp.reason,
+    since: new Date(
+      Date.now() - cooldownDays * 24 * 60 * 60 * 1000,
+    ).toISOString(),
+  });
+  const wasRecentlyRouted = recentFollowUps.some(
+    (event) => event.contactId === input.contactId,
+  );
+
+  if (wasRecentlyRouted) {
+    return {
+      ok: true,
+      status: "cooldown_blocked",
+      ...(recentRequestForContact.campaignKey
+        ? { campaignKey: recentRequestForContact.campaignKey }
+        : {}),
+      cooldownDays,
+      queuedCount: 0,
+    };
+  }
+
+  const queuedEvent = createQueuedOutboundMessageEvent({
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    channel: input.channel,
+    destination: input.destination,
+    message: followUp.message,
+    reason: followUp.reason,
+    ...(recentRequestForContact.campaignKey
+      ? { campaignKey: recentRequestForContact.campaignKey }
+      : {}),
+    runId: randomUUID(),
+    deliverAfter: receivedAt,
+  });
+
+  await appendEvents([queuedEvent]);
+
+  return {
+    ok: true,
+    status: followUp.status,
+    ...(recentRequestForContact.campaignKey
+      ? { campaignKey: recentRequestForContact.campaignKey }
+      : {}),
+    cooldownDays,
+    queuedCount: 1,
+    queuedEventId: queuedEvent.id,
   };
 }
 

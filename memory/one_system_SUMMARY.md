@@ -89,6 +89,7 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 - the dashboard now includes Module 3 outcomes visibility and campaign controls with readiness + run feedback
 - Module 3 reporting now tracks queued, delivered, replied, promoter-signal, and referral-intent outcomes
 - appointments created with `outcome: completed` now auto-trigger a delayed post-visit Module 3 review request with cooldown protection
+- inbound post-visit replies now route into promoter follow-up or recovery follow-up outreach with cooldown-safe queueing
 - module folders for all five product areas
 - med spa selected as first implementation niche
 

@@ -45,6 +45,7 @@ import {
 import {
   executeReviewsReferralsRun,
   previewReviewsReferralsRun,
+  routeReviewsReferralsReply,
   triggerPostVisitReviewRequest,
 } from "@one-system/reviews-referrals";
 import {
@@ -659,11 +660,34 @@ async function processInboundMessage(
     await appendEvents(persistedWorkflowEvents);
   }
 
+  let reviewsReferralsRouting:
+    | Awaited<ReturnType<typeof routeReviewsReferralsReply>>
+    | undefined;
+  let reviewsReferralsRoutingError: string | undefined;
+
+  try {
+    reviewsReferralsRouting = await routeReviewsReferralsReply({
+      workspaceId: input.workspaceId,
+      contactId: contact.id,
+      channel: input.channel,
+      destination: input.from,
+      messageBody: input.body,
+      receivedAt: input.receivedAt,
+    });
+  } catch (error) {
+    reviewsReferralsRoutingError =
+      error instanceof Error
+        ? error.message
+        : "Unable to process reviews/referrals feedback routing.";
+  }
+
   sendJson(response, 201, {
     ok: true,
     contactId: contact.id,
     event: inboundEvent,
     workflowEvents: persistedWorkflowEvents,
+    ...(reviewsReferralsRouting ? { reviewsReferralsRouting } : {}),
+    ...(reviewsReferralsRoutingError ? { reviewsReferralsRoutingError } : {}),
   });
 }
 
