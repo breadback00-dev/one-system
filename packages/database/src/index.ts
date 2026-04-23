@@ -642,6 +642,9 @@ export interface ReviewReferralOutcomeReport {
   referralFollowUpQueuedCount: number;
   recoveryFollowUpQueuedCount: number;
   referralSourceCapturedCount: number;
+  referralSourceHighConfidenceCount: number;
+  referralSourceMediumConfidenceCount: number;
+  referralSourceLowConfidenceCount: number;
   outcomes: ReviewReferralOutcomeRecord[];
 }
 
@@ -1667,6 +1670,9 @@ export async function getReviewReferralOutcomeReport(args: {
       referralFollowUpQueuedCount: 0,
       recoveryFollowUpQueuedCount: 0,
       referralSourceCapturedCount: 0,
+      referralSourceHighConfidenceCount: 0,
+      referralSourceMediumConfidenceCount: 0,
+      referralSourceLowConfidenceCount: 0,
       outcomes: [],
     };
   }
@@ -1922,6 +1928,15 @@ export async function getReviewReferralOutcomeReport(args: {
     ).length,
     referralSourceCapturedCount: outcomes.filter(
       (outcome) => outcome.referralSourceCaptured,
+    ).length,
+    referralSourceHighConfidenceCount: outcomes.filter(
+      (outcome) => outcome.referralSourceCaptureConfidence === "high",
+    ).length,
+    referralSourceMediumConfidenceCount: outcomes.filter(
+      (outcome) => outcome.referralSourceCaptureConfidence === "medium",
+    ).length,
+    referralSourceLowConfidenceCount: outcomes.filter(
+      (outcome) => outcome.referralSourceCaptureConfidence === "low",
     ).length,
     outcomes,
   };

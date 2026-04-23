@@ -545,6 +545,18 @@ export default async function HomePage({
               <span>Referral source captured</span>
               <strong>{reviewsSnapshot.referralSourceCapturedCount}</strong>
             </div>
+            <div>
+              <span>High-confidence source</span>
+              <strong>{reviewsSnapshot.referralSourceHighConfidenceCount}</strong>
+            </div>
+            <div>
+              <span>Medium-confidence source</span>
+              <strong>{reviewsSnapshot.referralSourceMediumConfidenceCount}</strong>
+            </div>
+            <div>
+              <span>Low-confidence source</span>
+              <strong>{reviewsSnapshot.referralSourceLowConfidenceCount}</strong>
+            </div>
           </div>
           <div className="list-block">
             {reviewsSnapshot.outcomes.length === 0 ? (
