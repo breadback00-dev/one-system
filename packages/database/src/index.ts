@@ -614,6 +614,12 @@ export interface ReviewReferralOutcomeRecord {
   promoterAt?: string;
   referralIntent: boolean;
   referralIntentAt?: string;
+  promoterFollowUpQueued: boolean;
+  promoterFollowUpQueuedAt?: string;
+  referralFollowUpQueued: boolean;
+  referralFollowUpQueuedAt?: string;
+  recoveryFollowUpQueued: boolean;
+  recoveryFollowUpQueuedAt?: string;
 }
 
 export interface ReviewReferralOutcomeReport {
@@ -625,6 +631,9 @@ export interface ReviewReferralOutcomeReport {
   repliedCount: number;
   promoterCount: number;
   referralIntentCount: number;
+  promoterFollowUpQueuedCount: number;
+  referralFollowUpQueuedCount: number;
+  recoveryFollowUpQueuedCount: number;
   outcomes: ReviewReferralOutcomeRecord[];
 }
 
@@ -1587,6 +1596,22 @@ function isReferralIntentSignal(messageBody: string): boolean {
   );
 }
 
+function matchesCampaignRunFilter(args: {
+  payload: MessageOutboundQueuedPayload;
+  campaignKey?: string;
+  runId?: string;
+}): boolean {
+  if (args.campaignKey && args.payload.campaignKey !== args.campaignKey) {
+    return false;
+  }
+
+  if (args.runId && args.payload.runId !== args.runId) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function getReviewReferralOutcomeReport(args: {
   workspaceId: string;
   campaignKey?: string;
@@ -1629,6 +1654,9 @@ export async function getReviewReferralOutcomeReport(args: {
       repliedCount: 0,
       promoterCount: 0,
       referralIntentCount: 0,
+      promoterFollowUpQueuedCount: 0,
+      referralFollowUpQueuedCount: 0,
+      recoveryFollowUpQueuedCount: 0,
       outcomes: [],
     };
   }
@@ -1644,7 +1672,7 @@ export async function getReviewReferralOutcomeReport(args: {
       event.occurredAt < earliest ? event.occurredAt : earliest,
     reviewQueuedEvents[0]!.occurredAt,
   );
-  const [contacts, deliveredEvents, inboundMessages] =
+  const [contacts, deliveredEvents, inboundMessages, queuedFollowUpEvents] =
     await Promise.all([
       prisma.contact.findMany({
         where: {
@@ -1672,6 +1700,17 @@ export async function getReviewReferralOutcomeReport(args: {
         },
         orderBy: { createdAt: "asc" },
       }),
+      prisma.event.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          name: "message.outbound_queued",
+          occurredAt: {
+            gte: earliestQueuedAt,
+          },
+        },
+        orderBy: { occurredAt: "asc" },
+        take: 1000,
+      }),
     ]);
   const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
   const deliveredByQueuedEventId = new Map(
@@ -1688,6 +1727,43 @@ export async function getReviewReferralOutcomeReport(args: {
     entries.push(message);
     inboundByContactId.set(message.contactId, entries);
   }
+  const promoterFollowUpByContactId = new Map<string, typeof queuedFollowUpEvents>();
+  const referralFollowUpByContactId = new Map<string, typeof queuedFollowUpEvents>();
+  const recoveryFollowUpByContactId = new Map<string, typeof queuedFollowUpEvents>();
+
+  for (const event of queuedFollowUpEvents) {
+    const payload = event.payload as unknown as MessageOutboundQueuedPayload;
+
+    if (
+      !matchesCampaignRunFilter({
+        payload,
+        ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
+        ...(args.runId ? { runId: args.runId } : {}),
+      })
+    ) {
+      continue;
+    }
+
+    if (payload.reason === "reviews_referrals.post-visit-request.promoter-follow-up") {
+      const entries = promoterFollowUpByContactId.get(payload.contactId) ?? [];
+      entries.push(event);
+      promoterFollowUpByContactId.set(payload.contactId, entries);
+      continue;
+    }
+
+    if (payload.reason === "reviews_referrals.post-visit-request.referral-follow-up") {
+      const entries = referralFollowUpByContactId.get(payload.contactId) ?? [];
+      entries.push(event);
+      referralFollowUpByContactId.set(payload.contactId, entries);
+      continue;
+    }
+
+    if (payload.reason === "reviews_referrals.post-visit-request.recovery-follow-up") {
+      const entries = recoveryFollowUpByContactId.get(payload.contactId) ?? [];
+      entries.push(event);
+      recoveryFollowUpByContactId.set(payload.contactId, entries);
+    }
+  }
 
   const outcomes = reviewQueuedEvents.map((event) => {
     const payload = event.payload as unknown as MessageOutboundQueuedPayload;
@@ -1703,6 +1779,15 @@ export async function getReviewReferralOutcomeReport(args: {
     const referralReply = replies.find((reply) =>
       isReferralIntentSignal(reply.body),
     );
+    const promoterFollowUpEvent = (
+      promoterFollowUpByContactId.get(payload.contactId) ?? []
+    ).find((queuedEvent) => queuedEvent.occurredAt >= event.occurredAt);
+    const referralFollowUpEvent = (
+      referralFollowUpByContactId.get(payload.contactId) ?? []
+    ).find((queuedEvent) => queuedEvent.occurredAt >= event.occurredAt);
+    const recoveryFollowUpEvent = (
+      recoveryFollowUpByContactId.get(payload.contactId) ?? []
+    ).find((queuedEvent) => queuedEvent.occurredAt >= event.occurredAt);
 
     return {
       queuedEventId: event.id,
@@ -1728,6 +1813,18 @@ export async function getReviewReferralOutcomeReport(args: {
       ...(referralReply
         ? { referralIntentAt: referralReply.createdAt.toISOString() }
         : {}),
+      promoterFollowUpQueued: Boolean(promoterFollowUpEvent),
+      ...(promoterFollowUpEvent
+        ? { promoterFollowUpQueuedAt: promoterFollowUpEvent.occurredAt.toISOString() }
+        : {}),
+      referralFollowUpQueued: Boolean(referralFollowUpEvent),
+      ...(referralFollowUpEvent
+        ? { referralFollowUpQueuedAt: referralFollowUpEvent.occurredAt.toISOString() }
+        : {}),
+      recoveryFollowUpQueued: Boolean(recoveryFollowUpEvent),
+      ...(recoveryFollowUpEvent
+        ? { recoveryFollowUpQueuedAt: recoveryFollowUpEvent.occurredAt.toISOString() }
+        : {}),
     } satisfies ReviewReferralOutcomeRecord;
   });
 
@@ -1741,6 +1838,15 @@ export async function getReviewReferralOutcomeReport(args: {
     promoterCount: outcomes.filter((outcome) => outcome.promoter).length,
     referralIntentCount: outcomes.filter((outcome) => outcome.referralIntent)
       .length,
+    promoterFollowUpQueuedCount: outcomes.filter(
+      (outcome) => outcome.promoterFollowUpQueued,
+    ).length,
+    referralFollowUpQueuedCount: outcomes.filter(
+      (outcome) => outcome.referralFollowUpQueued,
+    ).length,
+    recoveryFollowUpQueuedCount: outcomes.filter(
+      (outcome) => outcome.recoveryFollowUpQueued,
+    ).length,
     outcomes,
   };
 }

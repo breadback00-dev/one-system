@@ -456,6 +456,20 @@ export default async function HomePage({
               <strong>{reviewsSnapshot.referralIntentCount}</strong>
             </div>
           </div>
+          <div className="mini-stats">
+            <div>
+              <span>Promoter follow-up</span>
+              <strong>{reviewsSnapshot.promoterFollowUpQueuedCount}</strong>
+            </div>
+            <div>
+              <span>Referral follow-up</span>
+              <strong>{reviewsSnapshot.referralFollowUpQueuedCount}</strong>
+            </div>
+            <div>
+              <span>Recovery follow-up</span>
+              <strong>{reviewsSnapshot.recoveryFollowUpQueuedCount}</strong>
+            </div>
+          </div>
           <div className="list-block">
             {reviewsSnapshot.outcomes.length === 0 ? (
               <p>No review/referral activity recorded yet.</p>
@@ -481,7 +495,13 @@ export default async function HomePage({
                   </div>
                   <div className="row-meta">
                     <span className="pill">
-                      {outcome.referralIntent
+                      {outcome.recoveryFollowUpQueued
+                        ? "recovery queued"
+                        : outcome.referralFollowUpQueued
+                          ? "referral queued"
+                          : outcome.promoterFollowUpQueued
+                            ? "promoter queued"
+                        : outcome.referralIntent
                         ? "referral intent"
                         : outcome.promoter
                           ? "promoter"

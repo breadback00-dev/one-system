@@ -93,6 +93,7 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 - Module 3 now includes operator-facing review-response draft generation with sentiment classification, confidence, and suggested next action
 - Module 3 now has `POST /reviews-referrals/response-draft` for reusable response draft generation
 - Module 3 outcomes now include latest reply context and one-click dashboard draft generation from real customer replies
+- Module 3 outcomes now expose promoter/referral/recovery follow-up queued counts for operator visibility
 - module folders for all five product areas
 - med spa selected as first implementation niche
 
