@@ -184,6 +184,68 @@ function getModule2ReadinessChecks(args: {
   ];
 }
 
+function getModule3ReadinessChecks(args: {
+  eligibleCount: number;
+  queuedCount: number;
+  repliedCount: number;
+  promoterFollowUpQueuedCount: number;
+  referralFollowUpQueuedCount: number;
+  recoveryFollowUpQueuedCount: number;
+  referralIntentCount: number;
+  referralSourceCapturedCount: number;
+}) {
+  const followUpQueuedCount =
+    args.promoterFollowUpQueuedCount +
+    args.referralFollowUpQueuedCount +
+    args.recoveryFollowUpQueuedCount;
+
+  return [
+    {
+      label: "Post-visit audience ready",
+      ready: args.eligibleCount > 0,
+      detail:
+        args.eligibleCount > 0
+          ? `${args.eligibleCount} contacts currently eligible`
+          : "No eligible post-visit contacts in the default readiness preview",
+    },
+    {
+      label: "Campaign executed",
+      ready: args.queuedCount > 0,
+      detail:
+        args.queuedCount > 0
+          ? `${args.queuedCount} review/referral requests queued`
+          : "Queue at least one review/referral campaign run",
+    },
+    {
+      label: "Feedback flowing in",
+      ready: args.repliedCount > 0,
+      detail:
+        args.repliedCount > 0
+          ? `${args.repliedCount} inbound replies recorded`
+          : "No inbound replies recorded yet for queued requests",
+    },
+    {
+      label: "Routing actions active",
+      ready: followUpQueuedCount > 0,
+      detail:
+        followUpQueuedCount > 0
+          ? `${followUpQueuedCount} follow-up actions queued across promoter/referral/recovery paths`
+          : "No routed follow-up actions have been queued yet",
+    },
+    {
+      label: "Referral source visibility",
+      ready:
+        args.referralIntentCount === 0 || args.referralSourceCapturedCount > 0,
+      detail:
+        args.referralIntentCount === 0
+          ? "No referral-intent replies yet; source capture will validate once referral traffic appears"
+          : args.referralSourceCapturedCount > 0
+            ? `${args.referralSourceCapturedCount} referral source captures recorded`
+            : `${args.referralIntentCount} referral-intent replies observed but no source captures yet`,
+    },
+  ];
+}
+
 export default async function HomePage({
   searchParams,
 }: {
@@ -285,6 +347,16 @@ export default async function HomePage({
     queuedCount: reactivationSnapshot.queuedCount,
     repliedCount: reactivationSnapshot.repliedCount,
     bookedCount: reactivationSnapshot.bookedCount,
+  });
+  const module3ReadinessChecks = getModule3ReadinessChecks({
+    eligibleCount: defaultReviewsReadiness.eligibleCount,
+    queuedCount: reviewsSnapshot.queuedCount,
+    repliedCount: reviewsSnapshot.repliedCount,
+    promoterFollowUpQueuedCount: reviewsSnapshot.promoterFollowUpQueuedCount,
+    referralFollowUpQueuedCount: reviewsSnapshot.referralFollowUpQueuedCount,
+    recoveryFollowUpQueuedCount: reviewsSnapshot.recoveryFollowUpQueuedCount,
+    referralIntentCount: reviewsSnapshot.referralIntentCount,
+    referralSourceCapturedCount: reviewsSnapshot.referralSourceCapturedCount,
   });
 
   return (
@@ -886,6 +958,22 @@ export default async function HomePage({
         <SectionCard title="Module 2 Readiness">
           <div className="list-block">
             {module2ReadinessChecks.map((check) => (
+              <div className="list-row" key={check.label}>
+                <div>
+                  <strong>{check.label}</strong>
+                  <p>{check.detail}</p>
+                </div>
+                <span className={`pill ${check.ready ? "ready" : "needs_attention"}`}>
+                  {check.ready ? "ready" : "needs attention"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Module 3 Readiness">
+          <div className="list-block">
+            {module3ReadinessChecks.map((check) => (
               <div className="list-row" key={check.label}>
                 <div>
                   <strong>{check.label}</strong>
