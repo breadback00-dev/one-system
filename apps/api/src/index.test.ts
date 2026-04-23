@@ -66,6 +66,90 @@ function assertErrorMessage(
   assert.equal(response.json.error, expectedMessage);
 }
 
+async function testPaidAdsPositiveFlow(baseUrl: string) {
+  const workspaceId = "workspace_medspa_demo";
+  const uniqueSuffix = Date.now().toString().slice(-8);
+  const campaignKey = `api-paid-ads-test-${uniqueSuffix}`;
+  const utmCampaign = `api_paid_ads_${uniqueSuffix}`;
+  const phone = `+1555${uniqueSuffix}`;
+
+  const leadCreated = await requestJson({
+    baseUrl,
+    pathname: "/leads",
+    method: "POST",
+    body: {
+      workspaceId,
+      source: "facebook_ads",
+      firstName: "ApiPaidAds",
+      phone,
+      attribution: {
+        utmSource: "facebook",
+        utmMedium: "paid_social",
+        utmCampaign,
+      },
+    },
+  });
+  assert.equal(leadCreated.status, 201);
+  assert.equal(leadCreated.json.lead !== undefined, true);
+
+  const readinessQuery = new URLSearchParams({
+    workspaceId,
+    campaignKey,
+    limit: "50",
+    cooldownDays: "1",
+  });
+  const readiness = await requestJson({
+    baseUrl,
+    pathname: `/paid-ads/readiness?${readinessQuery.toString()}`,
+  });
+  assert.equal(readiness.status, 200);
+  assert.equal(Number(readiness.json.eligibleCount) >= 1, true);
+
+  const runResult = await requestJson({
+    baseUrl,
+    pathname: "/paid-ads/run",
+    method: "POST",
+    body: {
+      workspaceId,
+      campaignKey,
+      limit: 1,
+      cooldownDays: 1,
+    },
+  });
+  assert.equal(runResult.status, 201);
+  assert.equal(Number(runResult.json.queuedCount) >= 1, true);
+
+  const spendResult = await requestJson({
+    baseUrl,
+    pathname: "/paid-ads/spend",
+    method: "POST",
+    body: {
+      workspaceId,
+      source: "facebook_ads",
+      utmSource: "facebook",
+      utmCampaign,
+      amount: 125,
+      currency: "USD",
+      reportDate: new Date().toISOString(),
+    },
+  });
+  assert.equal(spendResult.status, 201);
+  assert.equal(spendResult.json.source, "facebook_ads");
+
+  const reportQuery = new URLSearchParams({
+    workspaceId,
+    campaignKey,
+    limit: "250",
+  });
+  const report = await requestJson({
+    baseUrl,
+    pathname: `/paid-ads/report?${reportQuery.toString()}`,
+  });
+  assert.equal(report.status, 200);
+  assert.equal(Number(report.json.queuedCount) >= 1, true);
+  assert.equal(Number(report.json.spendAmount) >= 125, true);
+}
+
 async function run() {
   const { server, baseUrl } = await startServer();
 
@@ -129,7 +213,9 @@ async function run() {
       "At least one of `email` or `phone` is required.",
     );
 
-    console.log("[api] endpoint validation tests passed");
+    await testPaidAdsPositiveFlow(baseUrl);
+
+    console.log("[api] endpoint validation and paid-ads flow tests passed");
   } finally {
     await stopServer(server);
   }

@@ -100,6 +100,7 @@ Seeded proof evidence (2026-04-23):
 - paid-ads audience suppression now uses whole-word opt-out keyword matching to avoid false positives from embedded text fragments, with focused database regression tests
 - paid-ads booked outcomes now prefer `appointment.booked` events (with appointment-record fallback) for more reliable attribution reporting
 - api package now includes in-process endpoint validation tests for Module 4 route guards and request parsing (`/paid-ads/spend` and shared lead validation paths)
+- api package now includes positive-path Module 4 paid-ads route coverage (lead attribution intake, readiness preview, run queueing, spend recording, and report retrieval)
 
 ## Module 5 - Sales Enablement
 

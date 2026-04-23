@@ -123,6 +123,7 @@ Module 3 is complete. Stay on Module 4 until explicitly told to switch modules.
 - `@one-system/database` now has focused opt-out keyword regression tests wired into workspace `npm run test`
 - Module 4 booked-outcome attribution in paid ads reporting now prefers first-class `appointment.booked` events before falling back to appointment records
 - `@one-system/api` now has endpoint validation integration tests (`/health`, `/paid-ads/spend`, `/leads`) running in workspace `npm run test` via an in-process API server factory
+- `@one-system/api` test coverage now includes a positive paid-ads route flow (`/leads` -> `/paid-ads/readiness` -> `/paid-ads/run` -> `/paid-ads/spend` -> `/paid-ads/report`) against seeded local DB state
 - roadmap and product spec module ordering are now aligned (Paid Ads before Sales Enablement)
 - module folders for all five product areas
 - canonical per-module execution plan in `docs/module-plans.md`
