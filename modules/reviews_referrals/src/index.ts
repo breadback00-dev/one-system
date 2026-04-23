@@ -99,6 +99,7 @@ export interface RouteReviewsReferralsReplyInput {
 
 export type RouteReviewsReferralsReplyStatus =
   | "queued_promoter_follow_up"
+  | "queued_referral_follow_up"
   | "queued_recovery_follow_up"
   | "ignored_no_recent_request"
   | "ignored_neutral"
@@ -137,6 +138,7 @@ const DEFAULT_FEEDBACK_LOOKBACK_DAYS = 30;
 const DEFAULT_FEEDBACK_COOLDOWN_DAYS = 7;
 const MINIMUM_POST_VISIT_DELAY_MINUTES = 5;
 const PROMOTER_FOLLOW_UP_REASON = `${reviewsReferralsWorkflow.key}.promoter-follow-up`;
+const REFERRAL_FOLLOW_UP_REASON = `${reviewsReferralsWorkflow.key}.referral-follow-up`;
 const RECOVERY_FOLLOW_UP_REASON = `${reviewsReferralsWorkflow.key}.recovery-follow-up`;
 const CAMPAIGN_KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
@@ -222,12 +224,27 @@ function isRecoveryFeedback(messageBody: string): boolean {
   );
 }
 
+function isReferralIntentFeedback(messageBody: string): boolean {
+  const normalized = messageBody.toLowerCase();
+
+  return (
+    normalized.includes("refer") ||
+    normalized.includes("referral") ||
+    normalized.includes("friend") ||
+    normalized.includes("family")
+  );
+}
+
 function getPromoterFollowUpMessage(): string {
   return "Thank you for the 5-star feedback. If you're open to it, reply REVIEW and we'll send our public review link. If someone comes to mind who could benefit, reply REFER and we'll help with an intro offer.";
 }
 
 function getRecoveryFollowUpMessage(): string {
   return "Thank you for the honest feedback. We're sorry your experience wasn't ideal. A team member will follow up shortly so we can make this right.";
+}
+
+function getReferralFollowUpMessage(): string {
+  return "Amazing, thank you for offering a referral. If you share their first name and best contact method, we can send a friendly intro offer and keep you posted.";
 }
 
 async function evaluateReviewsReferralsReadiness(
@@ -458,18 +475,27 @@ export async function routeReviewsReferralsReply(
     };
   }
 
-  const followUp = isPromoterFeedback(input.messageBody)
-    ? {
-        status: "queued_promoter_follow_up" as const,
-        reason: PROMOTER_FOLLOW_UP_REASON,
-        message: getPromoterFollowUpMessage(),
-      }
-    : isRecoveryFeedback(input.messageBody)
+  const promoterFeedback = isPromoterFeedback(input.messageBody);
+  const recoveryFeedback = isRecoveryFeedback(input.messageBody);
+  const referralIntentFeedback = isReferralIntentFeedback(input.messageBody);
+  const followUp = recoveryFeedback
       ? {
           status: "queued_recovery_follow_up" as const,
           reason: RECOVERY_FOLLOW_UP_REASON,
           message: getRecoveryFollowUpMessage(),
         }
+      : referralIntentFeedback
+        ? {
+            status: "queued_referral_follow_up" as const,
+            reason: REFERRAL_FOLLOW_UP_REASON,
+            message: getReferralFollowUpMessage(),
+          }
+        : promoterFeedback
+          ? {
+              status: "queued_promoter_follow_up" as const,
+              reason: PROMOTER_FOLLOW_UP_REASON,
+              message: getPromoterFollowUpMessage(),
+            }
       : null;
 
   if (!followUp) {

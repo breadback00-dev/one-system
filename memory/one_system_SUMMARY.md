@@ -89,7 +89,7 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 - the dashboard now includes Module 3 outcomes visibility and campaign controls with readiness + run feedback
 - Module 3 reporting now tracks queued, delivered, replied, promoter-signal, and referral-intent outcomes
 - appointments created with `outcome: completed` now auto-trigger a delayed post-visit Module 3 review request with cooldown protection
-- inbound post-visit replies now route into promoter follow-up or recovery follow-up outreach with cooldown-safe queueing
+- inbound post-visit replies now route into promoter, referral, or recovery follow-up outreach with cooldown-safe queueing
 - Module 3 now includes operator-facing review-response draft generation with sentiment classification, confidence, and suggested next action
 - Module 3 now has `POST /reviews-referrals/response-draft` for reusable response draft generation
 - module folders for all five product areas
