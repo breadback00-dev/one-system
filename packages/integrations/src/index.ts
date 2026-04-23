@@ -17,14 +17,95 @@ import type {
 import twilio from "twilio";
 
 export interface IntegrationConnection {
-  provider: "twilio" | "gohighlevel" | "hubspot" | "calcom";
+  provider: "twilio" | "gohighlevel" | "hubspot" | "calcom" | "dev-crm";
   workspaceId: string;
   status: "connected" | "disconnected";
+}
+
+export type CrmDormantContactSegment = "stale_lead" | "past_customer";
+
+export interface CrmDormantContactRecord {
+  externalId: string;
+  firstName: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  segment: CrmDormantContactSegment;
+  lastActivityAt: string;
+  sourceProvider: IntegrationConnection["provider"];
+}
+
+export interface CrmReactivationImportRow {
+  firstName: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  segment: CrmDormantContactSegment;
+  lastActivityAt: string;
+}
+
+export interface CrmSyncResult {
+  provider: IntegrationConnection["provider"];
+  workspaceId: string;
+  records: CrmDormantContactRecord[];
+  importRows: CrmReactivationImportRow[];
+}
+
+export interface CrmDormantContactSyncAdapter {
+  readonly provider: IntegrationConnection["provider"];
+  syncDormantContacts(args: {
+    workspaceId: string;
+    inactiveSince: string;
+    limit?: number;
+  }): Promise<CrmSyncResult>;
 }
 
 export interface TwilioInboundWebhookPayload {
   Body?: string;
   From?: string;
+}
+
+export function mapCrmRecordToReactivationImportRow(
+  record: CrmDormantContactRecord,
+): CrmReactivationImportRow {
+  return {
+    firstName: record.firstName,
+    segment: record.segment,
+    lastActivityAt: record.lastActivityAt,
+    ...(record.lastName ? { lastName: record.lastName } : {}),
+    ...(record.email ? { email: record.email } : {}),
+    ...(record.phone ? { phone: record.phone } : {}),
+  };
+}
+
+export class StaticCrmDormantContactSyncAdapter
+  implements CrmDormantContactSyncAdapter
+{
+  readonly provider = "dev-crm";
+
+  constructor(private readonly records: CrmDormantContactRecord[]) {}
+
+  async syncDormantContacts(args: {
+    workspaceId: string;
+    inactiveSince: string;
+    limit?: number;
+  }): Promise<CrmSyncResult> {
+    const inactiveSince = new Date(args.inactiveSince);
+    const records = this.records
+      .filter(
+        (record) =>
+          record.sourceProvider === this.provider &&
+          new Date(record.lastActivityAt) <= inactiveSince,
+      )
+      .slice(0, args.limit ?? 100);
+
+    return {
+      provider: this.provider,
+      workspaceId: args.workspaceId,
+      records,
+      importRows: records.map(mapCrmRecordToReactivationImportRow),
+    };
+  }
 }
 
 export function validateTwilioWebhookRequest(args: {
