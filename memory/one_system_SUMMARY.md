@@ -119,6 +119,8 @@ Module 3 is complete. Stay on Module 4 until explicitly told to switch modules.
 - local Module 4 proof evidence on 2026-04-23 shows paid outcome deltas (`queued=+1`, `replied=+1`, `qualified=+1`, `booked=+0`, `spend=+125`) and one attribution ROI row (`facebook_ads` + `proof_campaign`)
 - Module 4 proof pass now emits a clear schema-sync recovery hint when attribution columns are missing (run `npm run db:push`)
 - Module 4 proof pass now uses a unique proof UTM campaign per run so spend/ROI deltas remain deterministic in reused seeded workspaces
+- Module 4 opt-out suppression now uses whole-word keyword detection to avoid false positives from embedded fragments (for example, `weekend` containing `end`)
+- `@one-system/database` now has focused opt-out keyword regression tests wired into workspace `npm run test`
 - roadmap and product spec module ordering are now aligned (Paid Ads before Sales Enablement)
 - module folders for all five product areas
 - canonical per-module execution plan in `docs/module-plans.md`
