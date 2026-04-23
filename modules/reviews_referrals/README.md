@@ -16,3 +16,7 @@ Post-visit review flows, referral sequences, and reputation growth logic.
 - Includes focused routing regression tests for mixed sentiment, referral-priority routing, and capture-confidence rules.
 - Applies campaign-key cooldown checks before queueing repeat requests.
 - Reports queued, delivered, replied, promoter-signal, and referral-intent outcomes.
+
+## Operator Proof Command
+
+- Run `npm run proof:seeded --workspace @one-system/reviews-referrals` to execute a seeded end-to-end Module 3 proof pass and print evidence JSON.
