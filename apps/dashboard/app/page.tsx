@@ -1,10 +1,16 @@
 import {
+  getDashboardFunnelSnapshot,
+  getReactivationActionQueue,
+  getReactivationOutcomeReport,
+  getRecentReactivationRunSummaries,
+  getRecentAppointmentOverview,
   getRecentConversationThreads,
   getDeliveryStatus,
   getRecentLeadOverview,
   getRecentMessageTimeline,
 } from "@one-system/database";
 import { SectionCard } from "@one-system/ui";
+import { markReactivationItemHandled } from "./actions";
 
 const modules = [
   "Lead Capture + Instant Follow-Up",
@@ -22,10 +28,48 @@ function formatRelativeIso(iso: string) {
   });
 }
 
+function getReactivationStageLabel(
+  stage: "qualified_waiting_booking" | "replied_waiting_follow_up" | "delivered_no_reply",
+) {
+  if (stage === "qualified_waiting_booking") {
+    return "qualified, waiting to book";
+  }
+
+  if (stage === "replied_waiting_follow_up") {
+    return "replied, needs follow-up";
+  }
+
+  return "delivered, no reply yet";
+}
+
 export default async function HomePage() {
-  const [deliveryStatus, recentLeads, recentMessages, recentThreads] = await Promise.all([
+  const [
+    deliveryStatus,
+    funnelSnapshot,
+    reactivationSnapshot,
+    reactivationRuns,
+    reactivationQueue,
+    recentLeads,
+    recentAppointments,
+    recentMessages,
+    recentThreads,
+  ] = await Promise.all([
     getDeliveryStatus(),
+    getDashboardFunnelSnapshot(),
+    getReactivationOutcomeReport({
+      workspaceId: "workspace_medspa_demo",
+      limit: 25,
+    }),
+    getRecentReactivationRunSummaries({
+      workspaceId: "workspace_medspa_demo",
+      limit: 6,
+    }),
+    getReactivationActionQueue({
+      workspaceId: "workspace_medspa_demo",
+      limit: 8,
+    }),
     getRecentLeadOverview(),
+    getRecentAppointmentOverview(),
     getRecentMessageTimeline(),
     getRecentConversationThreads(),
   ]);
@@ -51,6 +95,27 @@ export default async function HomePage() {
       </section>
 
       <section className="ops-grid">
+        <SectionCard title="Funnel Snapshot">
+          <div className="stats-grid">
+            <div className="stat">
+              <span className="stat-label">New</span>
+              <strong>{funnelSnapshot.newLeads}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Responded</span>
+              <strong>{funnelSnapshot.respondedLeads}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Qualified</span>
+              <strong>{funnelSnapshot.qualifiedLeads}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Booked</span>
+              <strong>{funnelSnapshot.bookedAppointments}</strong>
+            </div>
+          </div>
+        </SectionCard>
+
         <SectionCard title="Delivery Status">
           <div className="stats-grid">
             <div className="stat">
@@ -105,9 +170,169 @@ export default async function HomePage() {
             )}
           </div>
         </SectionCard>
+
+        <SectionCard title="Reactivation Outcomes">
+          <div className="stats-grid">
+            <div className="stat">
+              <span className="stat-label">Queued</span>
+              <strong>{reactivationSnapshot.queuedCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Replied</span>
+              <strong>{reactivationSnapshot.repliedCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Qualified</span>
+              <strong>{reactivationSnapshot.qualifiedCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Booked</span>
+              <strong>{reactivationSnapshot.bookedCount}</strong>
+            </div>
+          </div>
+          <div className="list-block">
+            {reactivationSnapshot.outcomes.length === 0 ? (
+              <p>No reactivation activity recorded yet.</p>
+            ) : (
+              reactivationSnapshot.outcomes.slice(0, 4).map((outcome) => (
+                <div className="list-row" key={outcome.queuedEventId}>
+                  <div>
+                    <strong>{outcome.firstName}</strong>
+                    <p>
+                      {outcome.channel.toUpperCase()} • {outcome.destination}
+                    </p>
+                  </div>
+                  <div className="row-meta">
+                    <span className="pill">
+                      {outcome.booked
+                        ? "booked"
+                        : outcome.qualified
+                          ? "qualified"
+                          : outcome.replied
+                            ? "replied"
+                            : "sent"}
+                    </span>
+                    <time>{formatRelativeIso(outcome.queuedAt)}</time>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </SectionCard>
       </section>
 
       <section className="grid">
+        <article className="panel timeline-panel">
+          <h2>Recent Reactivation Runs</h2>
+          <div className="run-grid">
+            {reactivationRuns.length === 0 ? (
+              <p>No reactivation runs recorded yet.</p>
+            ) : (
+              reactivationRuns.map((run) => (
+                <section className="run-card" key={`${run.campaignKey}-${run.runId}`}>
+                  <div className="run-header">
+                    <div>
+                      <strong>{run.campaignKey}</strong>
+                      <p>Run {run.runId.slice(0, 8)}</p>
+                    </div>
+                    <time>{formatRelativeIso(run.lastQueuedAt)}</time>
+                  </div>
+                  <div className="mini-stats">
+                    <div>
+                      <span>Queued</span>
+                      <strong>{run.queuedCount}</strong>
+                    </div>
+                    <div>
+                      <span>Replied</span>
+                      <strong>{run.repliedCount}</strong>
+                    </div>
+                    <div>
+                      <span>Qualified</span>
+                      <strong>{run.qualifiedCount}</strong>
+                    </div>
+                    <div>
+                      <span>Booked</span>
+                      <strong>{run.bookedCount}</strong>
+                    </div>
+                  </div>
+                </section>
+              ))
+            )}
+          </div>
+        </article>
+
+        <article className="panel timeline-panel">
+          <h2>Reactivation Follow-Up Queue</h2>
+          <div className="list-block">
+            {reactivationQueue.length === 0 ? (
+              <p>No open reactivation follow-up items right now.</p>
+            ) : (
+              reactivationQueue.map((item) => (
+                <div className="list-row" key={item.queuedEventId}>
+                  <div>
+                    <strong>{item.firstName}</strong>
+                    <p>
+                      {item.channel.toUpperCase()} • {item.destination}
+                    </p>
+                    <p>
+                      {item.campaignKey ?? "reactivation-default"} • Run{" "}
+                      {(item.runId ?? "legacy-run").slice(0, 8)}
+                    </p>
+                  </div>
+                  <div className="row-meta">
+                    <span className={`pill ${item.stage}`}>
+                      {getReactivationStageLabel(item.stage)}
+                    </span>
+                    <time>
+                      {formatRelativeIso(
+                        item.qualifiedAt ?? item.repliedAt ?? item.queuedAt,
+                      )}
+                    </time>
+                    <form action={markReactivationItemHandled}>
+                      <input
+                        name="queuedEventId"
+                        type="hidden"
+                        value={item.queuedEventId}
+                      />
+                      <input name="contactId" type="hidden" value={item.contactId} />
+                      <input
+                        name="note"
+                        type="hidden"
+                        value={`Handled from Module 2 dashboard queue at ${new Date().toISOString()}`}
+                      />
+                      <button className="text-button" type="submit">
+                        Mark handled
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </article>
+
+        <article className="panel timeline-panel">
+          <h2>Recent Appointments</h2>
+          <div className="list-block">
+            {recentAppointments.length === 0 ? (
+              <p>No appointments booked yet.</p>
+            ) : (
+              recentAppointments.map((appointment) => (
+                <div className="list-row" key={appointment.appointmentId}>
+                  <div>
+                    <strong>{appointment.firstName}</strong>
+                    <p>Starts {formatRelativeIso(appointment.startsAt)}</p>
+                  </div>
+                  <div className="row-meta">
+                    <span className="pill">{appointment.outcome ?? "scheduled"}</span>
+                    <time>{formatRelativeIso(appointment.createdAt)}</time>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </article>
+
         <article className="panel timeline-panel">
           <h2>Recent Message Timeline</h2>
           <div className="list-block">

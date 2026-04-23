@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { CreateLeadInput, Contact, Lead } from "./entities";
 import type {
+  AppointmentBookedPayload,
   DomainEvent,
   LeadCreatedPayload,
   LeadQualifiedPayload,
@@ -10,12 +11,27 @@ import type {
   MessageInboundReceivedPayload,
   MessageOutboundQueuedPayload,
   MessageSuppressedPayload,
+  ReactivationFollowUpHandledPayload,
 } from "./events";
+import type { Appointment } from "./entities";
 
 export interface CreateLeadResult {
   contact: Contact;
   lead: Lead;
   events: [DomainEvent<LeadCreatedPayload>];
+}
+
+export interface CreateAppointmentInput {
+  workspaceId: string;
+  contactId: string;
+  leadId?: string;
+  startsAt: string;
+  outcome?: Appointment["outcome"];
+}
+
+export interface CreateAppointmentResult {
+  appointment: Appointment;
+  events: [DomainEvent<AppointmentBookedPayload>];
 }
 
 export function createLead(input: CreateLeadInput): CreateLeadResult {
@@ -60,6 +76,46 @@ export function createLead(input: CreateLeadInput): CreateLeadResult {
     contact,
     lead,
     events: [leadCreatedEvent],
+  };
+}
+
+export function createAppointment(
+  input: CreateAppointmentInput,
+): CreateAppointmentResult {
+  const timestamp = new Date();
+  const startsAt = new Date(input.startsAt);
+
+  if (Number.isNaN(startsAt.getTime())) {
+    throw new Error("`startsAt` must be a valid ISO datetime.");
+  }
+
+  const appointment: Appointment = {
+    id: randomUUID(),
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    startsAt,
+    ...(input.leadId ? { leadId: input.leadId } : {}),
+    ...(input.outcome ? { outcome: input.outcome } : {}),
+  };
+
+  return {
+    appointment,
+    events: [
+      {
+        id: randomUUID(),
+        workspaceId: input.workspaceId,
+        name: "appointment.booked",
+        occurredAt: timestamp,
+        payload: {
+          appointmentId: appointment.id,
+          contactId: appointment.contactId,
+          startsAt: appointment.startsAt.toISOString(),
+          bookedAt: timestamp.toISOString(),
+          ...(appointment.leadId ? { leadId: appointment.leadId } : {}),
+          ...(appointment.outcome ? { outcome: appointment.outcome } : {}),
+        },
+      },
+    ],
   };
 }
 
@@ -135,6 +191,28 @@ export function createMessageSuppressedEvent(args: {
       channel: args.channel,
       reason: args.reason,
       suppressedAt: args.suppressedAt ?? new Date().toISOString(),
+    },
+  };
+}
+
+export function createReactivationFollowUpHandledEvent(args: {
+  workspaceId: string;
+  queuedEventId: string;
+  contactId: string;
+  note?: string;
+}): DomainEvent<ReactivationFollowUpHandledPayload> {
+  const handledAt = new Date();
+
+  return {
+    id: randomUUID(),
+    workspaceId: args.workspaceId,
+    name: "reactivation.follow_up_handled",
+    occurredAt: handledAt,
+    payload: {
+      queuedEventId: args.queuedEventId,
+      contactId: args.contactId,
+      handledAt: handledAt.toISOString(),
+      ...(args.note?.trim() ? { note: args.note.trim() } : {}),
     },
   };
 }

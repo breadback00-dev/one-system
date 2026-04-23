@@ -3,6 +3,7 @@ export type DomainEventName =
   | "lead.responded"
   | "lead.qualified"
   | "appointment.booked"
+  | "reactivation.follow_up_handled"
   | "message.inbound_received"
   | "message.outbound_queued"
   | "message.suppressed"
@@ -41,6 +42,22 @@ export interface LeadQualifiedPayload {
   provider: string;
   qualificationReason: string;
   qualifiedAt: string;
+}
+
+export interface AppointmentBookedPayload {
+  appointmentId: string;
+  contactId: string;
+  leadId?: string;
+  startsAt: string;
+  outcome?: "scheduled" | "completed" | "cancelled" | "no_show";
+  bookedAt: string;
+}
+
+export interface ReactivationFollowUpHandledPayload {
+  queuedEventId: string;
+  contactId: string;
+  handledAt: string;
+  note?: string;
 }
 
 export interface MessageOutboundQueuedPayload {

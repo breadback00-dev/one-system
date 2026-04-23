@@ -1,12 +1,15 @@
 import { PrismaClient, type Prisma } from "@prisma/client";
 import { appConfig } from "@one-system/config";
+import { createReactivationFollowUpHandledEvent } from "@one-system/domain";
 import type { Contact, Lead, Workspace } from "@one-system/domain";
 import type { DomainEvent } from "@one-system/domain";
 import type {
+  AppointmentBookedPayload,
   MessageDeliveredPayload,
   MessageInboundReceivedPayload,
   MessageOutboundQueuedPayload,
   MessageSuppressedPayload,
+  ReactivationFollowUpHandledPayload,
 } from "@one-system/domain";
 import type {
   ConversationThread,
@@ -45,6 +48,31 @@ export interface SaveLeadTransactionResult {
   workspace: Workspace;
   contact: Contact;
   lead: Lead;
+  events: DomainEvent[];
+}
+
+export interface SaveAppointmentTransactionInput {
+  appointment: {
+    id: string;
+    workspaceId: string;
+    contactId: string;
+    leadId?: string;
+    startsAt: Date;
+    outcome?: "scheduled" | "completed" | "cancelled" | "no_show";
+  };
+  events: DomainEvent[];
+}
+
+export interface SaveAppointmentTransactionResult {
+  workspace: Workspace;
+  appointment: {
+    id: string;
+    workspaceId: string;
+    contactId: string;
+    leadId?: string;
+    startsAt: Date;
+    outcome?: "scheduled" | "completed" | "cancelled" | "no_show";
+  };
   events: DomainEvent[];
 }
 
@@ -204,6 +232,59 @@ export async function saveLeadTransaction(
   };
 }
 
+export async function saveAppointmentTransaction(
+  input: SaveAppointmentTransactionInput,
+): Promise<SaveAppointmentTransactionResult> {
+  const workspace = await ensureWorkspace(input.appointment.workspaceId);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const appointment = await tx.appointment.create({
+      data: {
+        id: input.appointment.id,
+        workspaceId: input.appointment.workspaceId,
+        contactId: input.appointment.contactId,
+        leadId: normalizeOptional(input.appointment.leadId),
+        startsAt: input.appointment.startsAt,
+        outcome: normalizeOptional(input.appointment.outcome),
+      },
+    });
+
+    const events = await Promise.all(
+      input.events.map((event) =>
+        tx.event.create({
+          data: {
+            id: event.id,
+            workspaceId: event.workspaceId,
+            name: event.name,
+            payload: event.payload as Prisma.InputJsonValue,
+            occurredAt: event.occurredAt,
+          },
+        }),
+      ),
+    );
+
+    return {
+      appointment: {
+        id: appointment.id,
+        workspaceId: appointment.workspaceId,
+        contactId: appointment.contactId,
+        startsAt: appointment.startsAt,
+        ...(appointment.leadId ? { leadId: appointment.leadId } : {}),
+        ...(appointment.outcome
+          ? { outcome: appointment.outcome as "scheduled" | "completed" | "cancelled" | "no_show" }
+          : {}),
+      },
+      events: events.map(toDomainEvent),
+    };
+  });
+
+  return {
+    workspace,
+    appointment: result.appointment,
+    events: result.events,
+  };
+}
+
 export async function appendEvents(events: DomainEvent[]): Promise<void> {
   if (events.length === 0) {
     return;
@@ -335,6 +416,22 @@ export interface LeadOverviewItem {
   createdAt: string;
 }
 
+export interface AppointmentOverviewItem {
+  appointmentId: string;
+  contactId: string;
+  firstName: string;
+  startsAt: string;
+  outcome?: "scheduled" | "completed" | "cancelled" | "no_show";
+  createdAt: string;
+}
+
+export interface DashboardFunnelSnapshot {
+  newLeads: number;
+  respondedLeads: number;
+  qualifiedLeads: number;
+  bookedAppointments: number;
+}
+
 export interface ActiveLeadRecord {
   id: string;
   contactId: string;
@@ -393,6 +490,38 @@ export interface ReactivationOutcomeReport {
   outcomes: ReactivationOutcomeRecord[];
 }
 
+export interface ReactivationRunSummary {
+  campaignKey: string;
+  runId: string;
+  queuedCount: number;
+  deliveredCount: number;
+  repliedCount: number;
+  qualifiedCount: number;
+  bookedCount: number;
+  lastQueuedAt: string;
+}
+
+export interface ReactivationActionItem {
+  queuedEventId: string;
+  contactId: string;
+  firstName: string;
+  destination: string;
+  channel: "sms" | "email";
+  campaignKey?: string;
+  runId?: string;
+  queuedAt: string;
+  stage: "qualified_waiting_booking" | "replied_waiting_follow_up" | "delivered_no_reply";
+  repliedAt?: string;
+  qualifiedAt?: string;
+}
+
+export interface ReactivationHandledRecord {
+  queuedEventId: string;
+  contactId: string;
+  handledAt: string;
+  note?: string;
+}
+
 export async function getRecentLeadOverview(limit = 6): Promise<LeadOverviewItem[]> {
   const leads = await prisma.lead.findMany({
     orderBy: { createdAt: "desc" },
@@ -410,6 +539,71 @@ export async function getRecentLeadOverview(limit = 6): Promise<LeadOverviewItem
     contactChannel: lead.contact.phone ?? lead.contact.email ?? "unknown",
     createdAt: lead.createdAt.toISOString(),
   }));
+}
+
+export async function getRecentAppointmentOverview(
+  workspaceId = DEFAULT_WORKSPACE_ID,
+  limit = 6,
+): Promise<AppointmentOverviewItem[]> {
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      workspaceId,
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: {
+      contact: true,
+    },
+  });
+
+  return appointments.map((appointment) => ({
+    appointmentId: appointment.id,
+    contactId: appointment.contactId,
+    firstName: appointment.contact.firstName,
+    startsAt: appointment.startsAt.toISOString(),
+    createdAt: appointment.createdAt.toISOString(),
+    ...(appointment.outcome
+      ? { outcome: appointment.outcome as "scheduled" | "completed" | "cancelled" | "no_show" }
+      : {}),
+  }));
+}
+
+export async function getDashboardFunnelSnapshot(
+  workspaceId = DEFAULT_WORKSPACE_ID,
+): Promise<DashboardFunnelSnapshot> {
+  const [newLeads, respondedLeads, qualifiedLeads, bookedAppointments] =
+    await Promise.all([
+      prisma.lead.count({
+        where: {
+          workspaceId,
+          status: "new",
+        },
+      }),
+      prisma.lead.count({
+        where: {
+          workspaceId,
+          status: "responded",
+        },
+      }),
+      prisma.lead.count({
+        where: {
+          workspaceId,
+          status: "qualified",
+        },
+      }),
+      prisma.appointment.count({
+        where: {
+          workspaceId,
+        },
+      }),
+    ]);
+
+  return {
+    newLeads,
+    respondedLeads,
+    qualifiedLeads,
+    bookedAppointments,
+  };
 }
 
 export async function getReactivationCandidates(args: {
@@ -716,7 +910,7 @@ export async function getReactivationOutcomeReport(args: {
     reactivationQueuedEvents[0]!.occurredAt,
   );
 
-  const [contacts, deliveredEvents, inboundMessages, qualifiedEvents, appointments] =
+  const [contacts, deliveredEvents, inboundMessages, qualifiedEvents, bookedEvents, appointments] =
     await Promise.all([
       prisma.contact.findMany({
         where: {
@@ -744,6 +938,13 @@ export async function getReactivationOutcomeReport(args: {
         where: {
           workspaceId: args.workspaceId,
           name: "lead.qualified",
+          occurredAt: { gte: earliestQueuedAt },
+        },
+      }),
+      prisma.event.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          name: "appointment.booked",
           occurredAt: { gte: earliestQueuedAt },
         },
       }),
@@ -779,6 +980,13 @@ export async function getReactivationOutcomeReport(args: {
     entries.push(toDomainEvent(event));
     qualifiedByContactId.set(payload.contactId, entries);
   }
+  const bookedByContactId = new Map<string, DomainEvent[]>();
+  for (const event of bookedEvents) {
+    const payload = event.payload as unknown as AppointmentBookedPayload;
+    const entries = bookedByContactId.get(payload.contactId) ?? [];
+    entries.push(toDomainEvent(event));
+    bookedByContactId.set(payload.contactId, entries);
+  }
   const appointmentsByContactId = new Map<string, typeof appointments>();
   for (const appointment of appointments) {
     const entries = appointmentsByContactId.get(appointment.contactId) ?? [];
@@ -797,9 +1005,15 @@ export async function getReactivationOutcomeReport(args: {
     const qualification = (qualifiedByContactId.get(payload.contactId) ?? []).find(
       (qualifiedEvent) => qualifiedEvent.occurredAt >= event.occurredAt,
     );
-    const booking = (appointmentsByContactId.get(payload.contactId) ?? []).find(
+    const bookedEvent = (bookedByContactId.get(payload.contactId) ?? []).find(
+      (bookingEvent) => bookingEvent.occurredAt >= event.occurredAt,
+    );
+    const fallbackAppointment = (appointmentsByContactId.get(payload.contactId) ?? []).find(
       (appointment) => appointment.createdAt >= event.occurredAt,
     );
+    const bookedAt =
+      bookedEvent?.occurredAt.toISOString() ??
+      fallbackAppointment?.createdAt.toISOString();
 
     return {
       queuedEventId: event.id,
@@ -819,8 +1033,8 @@ export async function getReactivationOutcomeReport(args: {
             qualifiedAt: qualification.occurredAt.toISOString(),
           }
         : {}),
-      booked: Boolean(booking),
-      ...(booking ? { bookedAt: booking.createdAt.toISOString() } : {}),
+      booked: Boolean(bookedEvent || fallbackAppointment),
+      ...(bookedAt ? { bookedAt } : {}),
     } satisfies ReactivationOutcomeRecord;
   });
 
@@ -835,6 +1049,138 @@ export async function getReactivationOutcomeReport(args: {
     bookedCount: outcomes.filter((outcome) => outcome.booked).length,
     outcomes,
   };
+}
+
+export async function getRecentReactivationRunSummaries(args: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<ReactivationRunSummary[]> {
+  const report = await getReactivationOutcomeReport({
+    workspaceId: args.workspaceId,
+    limit: Math.max(25, (args.limit ?? 6) * 20),
+  });
+
+  const summaryByRun = new Map<string, ReactivationRunSummary>();
+
+  for (const outcome of report.outcomes) {
+    const campaignKey = outcome.campaignKey ?? "reactivation-default";
+    const runId = outcome.runId ?? "legacy-run";
+    const compositeKey = `${campaignKey}::${runId}`;
+    const existing = summaryByRun.get(compositeKey);
+
+    if (!existing) {
+      summaryByRun.set(compositeKey, {
+        campaignKey,
+        runId,
+        queuedCount: 1,
+        deliveredCount: outcome.deliveredAt ? 1 : 0,
+        repliedCount: outcome.replied ? 1 : 0,
+        qualifiedCount: outcome.qualified ? 1 : 0,
+        bookedCount: outcome.booked ? 1 : 0,
+        lastQueuedAt: outcome.queuedAt,
+      });
+      continue;
+    }
+
+    existing.queuedCount += 1;
+    existing.deliveredCount += outcome.deliveredAt ? 1 : 0;
+    existing.repliedCount += outcome.replied ? 1 : 0;
+    existing.qualifiedCount += outcome.qualified ? 1 : 0;
+    existing.bookedCount += outcome.booked ? 1 : 0;
+    if (new Date(outcome.queuedAt) > new Date(existing.lastQueuedAt)) {
+      existing.lastQueuedAt = outcome.queuedAt;
+    }
+  }
+
+  return [...summaryByRun.values()]
+    .sort(
+      (left, right) =>
+        new Date(right.lastQueuedAt).getTime() - new Date(left.lastQueuedAt).getTime(),
+    )
+    .slice(0, args.limit ?? 6);
+}
+
+export async function getReactivationActionQueue(args: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<ReactivationActionItem[]> {
+  const [report, handledEvents] = await Promise.all([
+    getReactivationOutcomeReport({
+      workspaceId: args.workspaceId,
+      limit: Math.max(25, (args.limit ?? 8) * 20),
+    }),
+    prisma.event.findMany({
+      where: {
+        workspaceId: args.workspaceId,
+        name: "reactivation.follow_up_handled",
+      },
+      orderBy: { occurredAt: "desc" },
+      take: 500,
+    }),
+  ]);
+  const handledQueuedEventIds = new Set(
+    handledEvents
+      .map((event) => event.payload as unknown as ReactivationFollowUpHandledPayload)
+      .map((payload) => payload.queuedEventId),
+  );
+
+  return report.outcomes
+    .filter(
+      (outcome) =>
+        !outcome.booked && !handledQueuedEventIds.has(outcome.queuedEventId),
+    )
+    .map((outcome) => {
+      const stage = outcome.qualified
+        ? "qualified_waiting_booking"
+        : outcome.replied
+          ? "replied_waiting_follow_up"
+          : "delivered_no_reply";
+
+      return {
+        queuedEventId: outcome.queuedEventId,
+        contactId: outcome.contactId,
+        firstName: outcome.firstName,
+        destination: outcome.destination,
+        channel: outcome.channel,
+        ...(outcome.campaignKey ? { campaignKey: outcome.campaignKey } : {}),
+        ...(outcome.runId ? { runId: outcome.runId } : {}),
+        queuedAt: outcome.queuedAt,
+        stage,
+        ...(outcome.repliedAt ? { repliedAt: outcome.repliedAt } : {}),
+        ...(outcome.qualifiedAt ? { qualifiedAt: outcome.qualifiedAt } : {}),
+      } satisfies ReactivationActionItem;
+    })
+    .sort((left, right) => {
+      const priority = {
+        qualified_waiting_booking: 0,
+        replied_waiting_follow_up: 1,
+        delivered_no_reply: 2,
+      } as const;
+
+      const priorityDelta = priority[left.stage] - priority[right.stage];
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+
+      return new Date(right.queuedAt).getTime() - new Date(left.queuedAt).getTime();
+    })
+    .slice(0, args.limit ?? 8);
+}
+
+export async function markReactivationFollowUpHandled(args: {
+  workspaceId: string;
+  queuedEventId: string;
+  contactId: string;
+  note?: string;
+}): Promise<void> {
+  await appendEvents([
+    createReactivationFollowUpHandledEvent({
+      workspaceId: args.workspaceId,
+      queuedEventId: args.queuedEventId,
+      contactId: args.contactId,
+      ...(args.note ? { note: args.note } : {}),
+    }),
+  ]);
 }
 
 export async function recordOutboundMessage(args: {

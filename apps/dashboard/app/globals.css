@@ -109,6 +109,58 @@ h1 {
   gap: 18px;
 }
 
+.run-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.run-card {
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.run-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.run-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.mini-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mini-stats div {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(165, 80, 45, 0.05);
+}
+
+.mini-stats span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.mini-stats strong {
+  font-size: 1.25rem;
+}
+
 .thread-card {
   padding: 18px;
   border-radius: 20px;
@@ -241,6 +293,36 @@ h1 {
   text-transform: capitalize;
 }
 
+.pill.qualified_waiting_booking {
+  background: rgba(104, 141, 78, 0.12);
+  border-color: rgba(104, 141, 78, 0.28);
+}
+
+.pill.replied_waiting_follow_up {
+  background: rgba(197, 139, 54, 0.14);
+  border-color: rgba(197, 139, 54, 0.3);
+}
+
+.pill.delivered_no_reply {
+  background: rgba(55, 84, 110, 0.1);
+  border-color: rgba(55, 84, 110, 0.22);
+}
+
+.text-button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: var(--text);
+  color: var(--surface-strong);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.text-button:hover {
+  background: var(--accent);
+}
+
 @media (max-width: 720px) {
   .page-shell {
     padding: 32px 18px 56px;
@@ -252,6 +334,10 @@ h1 {
   }
 
   .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mini-stats {
     grid-template-columns: 1fr;
   }
 

@@ -42,6 +42,12 @@ M1 - Platform Foundation
 - reactivation runs now support `campaignKey` + `runId` metadata on queued outreach
 - reactivation applies a cooldown window and skips recently targeted contacts for the same campaign key
 - `GET /reactivation/report` now summarizes reactivation sends, deliveries, replies, qualifications, and bookings by campaign key and/or run id
+- `POST /appointments` now creates appointments and emits a first-class `appointment.booked` event
+- reactivation reporting now prefers explicit `appointment.booked` events before falling back to later appointment records
+- the dashboard now shows a funnel snapshot, recent appointments, and compact reactivation outcome visibility
+- the dashboard now also shows grouped recent reactivation runs by campaign key and run id
+- the dashboard now includes a Module 2 reactivation follow-up queue for replied and qualified contacts that are still unbooked
+- Module 2 queue items can now be marked handled from the dashboard through a `reactivation.follow_up_handled` event
 - module folders for all five product areas
 - med spa selected as first implementation niche
 
@@ -67,7 +73,7 @@ M1 - Platform Foundation
 - generalize the minimal sequence capability into reusable step definitions and scheduling rules
 - expose response state and workflow outcomes more explicitly in the dashboard
 - deepen Reactivation with reply/booking tracking, richer segmentation rules, and clearer run reporting
-- add first-class booking creation flows instead of inferring booking follow-through from appointments that appear later
+- deepen Module 2 operator actions with booking shortcuts, conversation context, and handled-item audit visibility
 
 ## How To Resume
 

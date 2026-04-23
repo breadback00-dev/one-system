@@ -20,12 +20,15 @@ import {
   markLeadQualified,
   markLeadResponded,
   recordInboundMessage,
+  saveAppointmentTransaction,
   saveLeadTransaction,
 } from "@one-system/database";
 import {
+  createAppointment,
   createMessageSuppressedEvent,
   createLead,
   createMessageInboundReceivedEvent,
+  type Appointment,
   type CreateLeadInput,
   type DomainEvent,
   type MessageInboundReceivedPayload,
@@ -66,6 +69,14 @@ interface ReactivationRunBody {
   limit?: number;
   cooldownDays?: number;
   campaignKey?: string;
+}
+
+interface AppointmentRequestBody {
+  workspaceId?: string;
+  contactId?: string;
+  leadId?: string;
+  startsAt?: string;
+  outcome?: Appointment["outcome"];
 }
 
 interface ReactivationReportQuery {
@@ -213,6 +224,37 @@ function validateReactivationRunInput(body: ReactivationRunBody) {
     limit,
     cooldownDays,
     campaignKey,
+  };
+}
+
+function validateAppointmentInput(body: AppointmentRequestBody) {
+  const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
+  const contactId = body.contactId?.trim();
+  const leadId = body.leadId?.trim() || undefined;
+  const startsAt = body.startsAt?.trim();
+  const outcome = body.outcome;
+
+  if (!contactId) {
+    throw new Error("`contactId` is required.");
+  }
+
+  if (!startsAt) {
+    throw new Error("`startsAt` is required.");
+  }
+
+  if (
+    outcome &&
+    !["scheduled", "completed", "cancelled", "no_show"].includes(outcome)
+  ) {
+    throw new Error("`outcome` must be one of scheduled, completed, cancelled, or no_show.");
+  }
+
+  return {
+    workspaceId,
+    contactId,
+    ...(leadId ? { leadId } : {}),
+    startsAt,
+    ...(outcome ? { outcome } : {}),
   };
 }
 
@@ -388,6 +430,23 @@ const server = createServer(async (request, response) => {
         lead: saved.lead,
         events: saved.events,
         queuedEvents: followUpEvents,
+      });
+      return;
+    }
+
+    if (request.method === "POST" && requestUrl.pathname === "/appointments") {
+      const body = await readJsonBody<AppointmentRequestBody>(request);
+      const input = validateAppointmentInput(body);
+      const appointmentResult = createAppointment(input);
+      const saved = await saveAppointmentTransaction(appointmentResult);
+
+      sendJson(response, 201, {
+        workspace: saved.workspace,
+        appointment: {
+          ...saved.appointment,
+          startsAt: saved.appointment.startsAt.toISOString(),
+        },
+        events: saved.events,
       });
       return;
     }

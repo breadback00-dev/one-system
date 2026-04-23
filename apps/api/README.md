@@ -5,6 +5,7 @@ Backend entrypoint for APIs, webhooks, background jobs, workflow orchestration, 
 ## Current Routes
 
 - `POST /leads` creates a lead and emits follow-up workflow events.
+- `POST /appointments` creates an appointment, persists it, and emits an `appointment.booked` event.
 - `POST /messages/inbound` accepts normalized JSON inbound messages for local testing.
 - `POST /reactivation/run` finds dormant contacts with no recent activity, segments them into stale leads and past customers, applies a cooldown window by `campaignKey`, and queues a reactivation outreach batch.
 - `GET /reactivation/report` summarizes queued reactivation outreach by `campaignKey` and/or `runId`, including delivery, reply, qualification, and booking-follow-through signals.
@@ -18,7 +19,7 @@ Backend entrypoint for APIs, webhooks, background jobs, workflow orchestration, 
 - The most recent response-eligible lead for that contact is marked as `responded`.
 - A qualification keyword in the inbound reply can now trigger `lead.qualified`.
 - A qualified lead now receives a booking-handoff message using `BOOKING_HANDOFF_URL`.
-- Reactivation reporting now traces queued outreach through later inbound replies, qualification events, and appointments for the same contact after the send.
+- Reactivation reporting now traces queued outreach through later inbound replies, qualification events, and explicit `appointment.booked` signals for the same contact after the send.
 - Pending auto-follow-up messages for the lead-capture workflow are suppressed once the lead replies before delivery.
 - Repeat inbound replies do not keep re-emitting the same `lead.responded` side effect once the lead has already moved out of `new` or `contacted`.
 
