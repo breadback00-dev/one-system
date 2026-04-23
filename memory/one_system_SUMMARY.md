@@ -68,6 +68,7 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 - Module 2 now has a side-effect-free reactivation readiness preview reused by the dashboard and exposed at `GET /reactivation/readiness`
 - the dashboard campaign controls now show default readiness before queueing outreach
 - Module 2 past-customer reactivation candidates now require old appointment activity, and candidate `lastActivityAt` reflects the latest lead, appointment, message, or contact activity
+- Module 2 now has `POST /reactivation/import` for CSV dormant contact import with `stale_lead` and `past_customer` rows
 - module folders for all five product areas
 - med spa selected as first implementation niche
 
@@ -88,9 +89,8 @@ Stay on Module 2 until explicitly told to switch modules. Say clearly before sta
 
 ## Immediate Next Step
 
-- review the current uncommitted Module 2 checkpoint
-- consider a meaningful Module 2 commit after one more review/build pass
-- continue Module 2 with final readiness/operator checks, not Module 3
+- review the latest Module 2 CSV import checkpoint if uncommitted work exists
+- continue Module 2 with CRM sync adapter shape or final readiness/operator checks, not Module 3
 - if committing, batch the current Module 2 work into a meaningful checkpoint
 
 ## How To Resume

@@ -15,12 +15,14 @@ import {
   getPendingWorkflowMessagesForContact,
   getReactivationOutcomeReport,
   getRecentEvents,
+  importReactivationContacts,
   markLeadQualified,
   markLeadResponded,
   recordInboundMessage,
   saveAppointmentTransaction,
   saveLeadTransaction,
   type ReactivationAudienceSegment,
+  type ReactivationImportRow,
 } from "@one-system/database";
 import {
   createAppointment,
@@ -88,6 +90,15 @@ interface ReactivationReportQuery {
   runId?: string;
   limit: number;
 }
+
+const reactivationImportHeaders = [
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+  "segment",
+  "lastActivityAt",
+] as const;
 
 const port = Number.parseInt(process.env.PORT ?? "4000", 10);
 
@@ -242,6 +253,117 @@ function validateReactivationRunInput(body: ReactivationRunBody) {
     campaignKey,
     audienceSegment,
   };
+}
+
+function parseCsvRows(input: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    const nextChar = input[index + 1];
+
+    if (char === '"' && inQuotes && nextChar === '"') {
+      field += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      row.push(field.trim());
+      field = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") {
+        index += 1;
+      }
+      row.push(field.trim());
+      field = "";
+      if (row.some((value) => value.length > 0)) {
+        rows.push(row);
+      }
+      row = [];
+      continue;
+    }
+
+    field += char;
+  }
+
+  row.push(field.trim());
+  if (row.some((value) => value.length > 0)) {
+    rows.push(row);
+  }
+
+  if (inQuotes) {
+    throw new Error("CSV contains an unterminated quoted field.");
+  }
+
+  return rows;
+}
+
+function parseReactivationImportCsv(input: string): ReactivationImportRow[] {
+  const [headerRow, ...dataRows] = parseCsvRows(input);
+
+  if (!headerRow) {
+    throw new Error("CSV import requires a header row.");
+  }
+
+  const headerIndexes = new Map(headerRow.map((header, index) => [header, index]));
+  const missingHeaders = reactivationImportHeaders.filter(
+    (header) => !headerIndexes.has(header),
+  );
+
+  if (missingHeaders.length > 0) {
+    throw new Error(`CSV import is missing headers: ${missingHeaders.join(", ")}.`);
+  }
+
+  return dataRows.map((row, rowIndex) => {
+    const getValue = (header: (typeof reactivationImportHeaders)[number]) =>
+      row[headerIndexes.get(header)!]?.trim() ?? "";
+    const firstName = getValue("firstName");
+    const lastName = getValue("lastName");
+    const email = getValue("email");
+    const phone = getValue("phone");
+    const segment = getValue("segment");
+    const lastActivityAt = getValue("lastActivityAt");
+    const rowNumber = rowIndex + 2;
+
+    if (!firstName) {
+      throw new Error(`CSV row ${rowNumber} is missing firstName.`);
+    }
+
+    if (!email && !phone) {
+      throw new Error(`CSV row ${rowNumber} needs email or phone.`);
+    }
+
+    if (segment !== "stale_lead" && segment !== "past_customer") {
+      throw new Error(
+        `CSV row ${rowNumber} segment must be stale_lead or past_customer.`,
+      );
+    }
+
+    if (!lastActivityAt || Number.isNaN(new Date(lastActivityAt).getTime())) {
+      throw new Error(`CSV row ${rowNumber} has an invalid lastActivityAt.`);
+    }
+
+    return {
+      firstName,
+      segment,
+      lastActivityAt: new Date(lastActivityAt).toISOString(),
+      ...(lastName ? { lastName } : {}),
+      ...(email ? { email } : {}),
+      ...(phone ? { phone } : {}),
+    } satisfies ReactivationImportRow;
+  });
 }
 
 function validateReactivationReadinessQuery(requestUrl: URL) {
@@ -515,6 +637,19 @@ const server = createServer(async (request, response) => {
       const body = await readJsonBody<InboundMessageBody>(request);
       const input = validateInboundMessageInput(body);
       await processInboundMessage(input, response);
+      return;
+    }
+
+    if (request.method === "POST" && requestUrl.pathname === "/reactivation/import") {
+      const csv = await readTextBody(request);
+      const rows = parseReactivationImportCsv(csv);
+      const result = await importReactivationContacts({
+        workspaceId:
+          requestUrl.searchParams.get("workspaceId")?.trim() ||
+          "workspace_medspa_demo",
+        rows,
+      });
+      sendJson(response, 201, result);
       return;
     }
 

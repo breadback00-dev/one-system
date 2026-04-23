@@ -4,6 +4,7 @@ Dormant lead and customer reactivation campaigns with messaging and booking conv
 
 ## Current Capabilities
 
+- Imports dormant contacts from CSV-ready rows for first-pass reactivation audiences.
 - Builds dormant outreach events for stale leads and past customers.
 - Executes shared reactivation runs for API and dashboard callers.
 - Applies campaign-key cooldowns before queueing outreach.

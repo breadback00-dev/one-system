@@ -536,6 +536,24 @@ export interface ReactivationHandledRecord {
   note?: string;
 }
 
+export interface ReactivationImportRow {
+  firstName: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  segment: "stale_lead" | "past_customer";
+  lastActivityAt: string;
+}
+
+export interface ReactivationImportResult {
+  workspaceId: string;
+  importedCount: number;
+  createdContactCount: number;
+  updatedContactCount: number;
+  staleLeadCount: number;
+  pastCustomerCount: number;
+}
+
 export async function getRecentLeadOverview(limit = 6): Promise<LeadOverviewItem[]> {
   const leads = await prisma.lead.findMany({
     orderBy: { createdAt: "desc" },
@@ -580,6 +598,94 @@ export async function getRecentAppointmentOverview(
       ? { outcome: appointment.outcome as "scheduled" | "completed" | "cancelled" | "no_show" }
       : {}),
   }));
+}
+
+export async function importReactivationContacts(args: {
+  workspaceId?: string;
+  rows: ReactivationImportRow[];
+}): Promise<ReactivationImportResult> {
+  const workspaceId = args.workspaceId ?? DEFAULT_WORKSPACE_ID;
+  await ensureWorkspace(workspaceId);
+
+  let createdContactCount = 0;
+  let updatedContactCount = 0;
+  let staleLeadCount = 0;
+  let pastCustomerCount = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const row of args.rows) {
+      const lastActivityAt = new Date(row.lastActivityAt);
+      const existingContact = await tx.contact.findFirst({
+        where: {
+          workspaceId,
+          OR: [
+            ...(row.email ? [{ email: row.email }] : []),
+            ...(row.phone ? [{ phone: row.phone }] : []),
+          ],
+        },
+      });
+      const contact = existingContact
+        ? await tx.contact.update({
+            where: { id: existingContact.id },
+            data: {
+              firstName: row.firstName,
+              lastName: normalizeOptional(row.lastName),
+              email: normalizeOptional(row.email) ?? existingContact.email,
+              phone: normalizeOptional(row.phone) ?? existingContact.phone,
+            },
+          })
+        : await tx.contact.create({
+            data: {
+              workspaceId,
+              firstName: row.firstName,
+              lastName: normalizeOptional(row.lastName),
+              email: normalizeOptional(row.email),
+              phone: normalizeOptional(row.phone),
+              createdAt: lastActivityAt,
+            },
+          });
+
+      if (existingContact) {
+        updatedContactCount += 1;
+      } else {
+        createdContactCount += 1;
+      }
+
+      if (row.segment === "past_customer") {
+        pastCustomerCount += 1;
+        await tx.appointment.create({
+          data: {
+            workspaceId,
+            contactId: contact.id,
+            startsAt: lastActivityAt,
+            outcome: "completed",
+            createdAt: lastActivityAt,
+          },
+        });
+        continue;
+      }
+
+      staleLeadCount += 1;
+      await tx.lead.create({
+        data: {
+          workspaceId,
+          contactId: contact.id,
+          source: "reactivation_import",
+          status: "lost",
+          createdAt: lastActivityAt,
+        },
+      });
+    }
+  });
+
+  return {
+    workspaceId,
+    importedCount: args.rows.length,
+    createdContactCount,
+    updatedContactCount,
+    staleLeadCount,
+    pastCustomerCount,
+  };
 }
 
 export async function getAvailableBookingSlots(args: {
