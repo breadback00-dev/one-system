@@ -222,11 +222,15 @@ function validateInboundMessageInput(body: InboundMessageBody) {
 function validateReactivationAudienceSegment(
   value: string | null | undefined,
 ): ReactivationAudienceSegment {
+  if (!value || value === "all") {
+    return "all";
+  }
+
   if (value === "stale_leads" || value === "past_customers") {
     return value;
   }
 
-  return "all";
+  throw new Error("`audienceSegment` must be one of all, stale_leads, or past_customers.");
 }
 
 function validateReactivationRunInput(body: ReactivationRunBody) {

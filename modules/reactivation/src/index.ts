@@ -61,6 +61,9 @@ export interface ExecuteReactivationRunResult extends ReactivationReadinessResul
   runId: string;
 }
 
+const DEFAULT_CAMPAIGN_KEY = "reactivation-default";
+const CAMPAIGN_KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
 function countSegment(
   candidates: ReactivationCandidate[],
   segment: ReactivationCandidate["segment"],
@@ -83,10 +86,27 @@ function getReadinessStatus(args: {
   return "cooldown_blocked";
 }
 
+function normalizeCampaignKey(input: string): string {
+  const campaignKey = input.trim().toLowerCase();
+
+  if (!campaignKey) {
+    return DEFAULT_CAMPAIGN_KEY;
+  }
+
+  if (!CAMPAIGN_KEY_PATTERN.test(campaignKey)) {
+    throw new Error(
+      "Campaign key must start with a letter or number and use only lowercase letters, numbers, dashes, or underscores (max 64 chars).",
+    );
+  }
+
+  return campaignKey;
+}
+
 async function evaluateReactivationReadiness(
   input: ExecuteReactivationRunInput,
 ): Promise<Omit<ReactivationReadinessResult, "ok">> {
   const audienceSegment = input.audienceSegment ?? "all";
+  const campaignKey = normalizeCampaignKey(input.campaignKey);
   const candidates = await getReactivationCandidates({
     ...input,
     audienceSegment,
@@ -100,7 +120,7 @@ async function evaluateReactivationReadiness(
   });
   const recentlyTargetedContactIds = new Set(
     recentTargets
-      .filter((target) => target.campaignKey === input.campaignKey)
+      .filter((target) => target.campaignKey === campaignKey)
       .map((target) => target.contactId),
   );
   const eligibleCandidates = candidates.filter(
@@ -118,7 +138,7 @@ async function evaluateReactivationReadiness(
     candidateCount: candidates.length,
     eligibleCount: eligibleCandidates.length,
     skippedCount: skippedCandidates.length,
-    campaignKey: input.campaignKey,
+    campaignKey,
     cooldownDays: input.cooldownDays,
     audienceSegment,
     segmentBreakdown: {
@@ -163,7 +183,7 @@ export async function executeReactivationRun(
   const readiness = await evaluateReactivationReadiness(input);
   const runId = randomUUID();
   const queuedEvents = buildReactivationOutreachEvents(readiness.candidates, {
-    campaignKey: input.campaignKey,
+    campaignKey: readiness.campaignKey,
     runId,
   });
 

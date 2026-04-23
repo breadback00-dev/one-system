@@ -112,7 +112,9 @@ function getReactivationRunFeedback(
 }
 
 function getModule2ReadinessChecks(args: {
-  importCount: number;
+  liveImportCount: number;
+  dryRunImportCount: number;
+  importedContactCount: number;
   eligibleCount: number;
   runCount: number;
   bookingSlotCount: number;
@@ -124,11 +126,13 @@ function getModule2ReadinessChecks(args: {
   return [
     {
       label: "Dormant list imported",
-      ready: args.importCount > 0,
+      ready: args.liveImportCount > 0 || args.eligibleCount > 0,
       detail:
-        args.importCount > 0
-          ? `${args.importCount} import or dry-run event recorded`
-          : "Run a CSV import or dry-run first",
+        args.liveImportCount > 0
+          ? `${args.importedContactCount} contacts loaded across ${args.liveImportCount} live imports`
+          : args.dryRunImportCount > 0
+            ? `${args.dryRunImportCount} dry-run preview(s) recorded, but no live import yet`
+            : "Run a CSV import or CRM sync import to load dormant contacts",
     },
     {
       label: "Audience ready",
@@ -226,8 +230,15 @@ export default async function HomePage({
     getRecentMessageTimeline(),
     getRecentConversationThreads(),
   ]);
+  const liveImports = reactivationImports.filter((record) => !record.dryRun);
+  const dryRunImports = reactivationImports.filter((record) => record.dryRun);
   const module2ReadinessChecks = getModule2ReadinessChecks({
-    importCount: reactivationImports.length,
+    liveImportCount: liveImports.length,
+    dryRunImportCount: dryRunImports.length,
+    importedContactCount: liveImports.reduce(
+      (sum, record) => sum + record.importedCount,
+      0,
+    ),
     eligibleCount: defaultReactivationReadiness.eligibleCount,
     runCount: reactivationRuns.length,
     bookingSlotCount: reactivationBookingSlots.length,

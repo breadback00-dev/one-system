@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import {
   assertReactivationFollowUpActionable,
+  getAvailableBookingSlots,
   isAppointmentSlotAvailable,
   markReactivationFollowUpHandled,
   saveAppointmentTransaction,
@@ -17,19 +18,21 @@ function parseAudienceSegment(value: FormDataEntryValue | null): ReactivationAud
   const audienceSegment = String(value ?? "").trim();
 
   if (
+    audienceSegment === "all" ||
     audienceSegment === "stale_leads" ||
     audienceSegment === "past_customers"
   ) {
     return audienceSegment;
   }
 
-  return "all";
+  throw new Error("Audience segment must be all, stale_leads, or past_customers.");
 }
 
 export async function markReactivationItemHandled(formData: FormData) {
   const queuedEventId = String(formData.get("queuedEventId") ?? "").trim();
   const contactId = String(formData.get("contactId") ?? "").trim();
-  const note = String(formData.get("note") ?? "").trim();
+  const rawNote = String(formData.get("note") ?? "").trim();
+  const note = rawNote.length > 280 ? rawNote.slice(0, 280) : rawNote;
 
   if (!queuedEventId || !contactId) {
     throw new Error("Reactivation queue item is missing required identifiers.");
@@ -71,6 +74,19 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
     queuedEventId,
     contactId,
   });
+
+  const availableSlots = await getAvailableBookingSlots({
+    workspaceId: "workspace_medspa_demo",
+    daysAhead: 14,
+    limit: 50,
+  });
+  const selectedSlotIsOffered = availableSlots.some(
+    (slot) => slot.startsAt === startsAt.toISOString(),
+  );
+
+  if (!selectedSlotIsOffered) {
+    throw new Error("Selected appointment slot is no longer offered.");
+  }
 
   const isAvailable = await isAppointmentSlotAvailable({
     workspaceId: "workspace_medspa_demo",
