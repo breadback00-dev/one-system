@@ -586,6 +586,46 @@ export interface ReactivationImportRecord {
   dryRun: boolean;
 }
 
+export interface ReviewRequestCandidate {
+  workspaceId: string;
+  contactId: string;
+  appointmentId: string;
+  firstName: string;
+  channel: "sms" | "email";
+  destination: string;
+  completedVisitAt: string;
+}
+
+export interface ReviewReferralOutcomeRecord {
+  queuedEventId: string;
+  contactId: string;
+  firstName: string;
+  channel: "sms" | "email";
+  destination: string;
+  campaignKey?: string;
+  runId?: string;
+  queuedAt: string;
+  deliveredAt?: string;
+  replied: boolean;
+  repliedAt?: string;
+  promoter: boolean;
+  promoterAt?: string;
+  referralIntent: boolean;
+  referralIntentAt?: string;
+}
+
+export interface ReviewReferralOutcomeReport {
+  workspaceId: string;
+  campaignKey?: string;
+  runId?: string;
+  queuedCount: number;
+  deliveredCount: number;
+  repliedCount: number;
+  promoterCount: number;
+  referralIntentCount: number;
+  outcomes: ReviewReferralOutcomeRecord[];
+}
+
 export async function getRecentLeadOverview(limit = 6): Promise<LeadOverviewItem[]> {
   const leads = await prisma.lead.findMany({
     orderBy: { createdAt: "desc" },
@@ -1068,6 +1108,65 @@ export async function getReactivationCandidates(args: {
   ].slice(0, args.limit ?? 25);
 }
 
+export async function getReviewRequestCandidates(args: {
+  workspaceId: string;
+  completedDaysAgo: number;
+  limit?: number;
+}): Promise<ReviewRequestCandidate[]> {
+  const cutoff = new Date(
+    Date.now() - Math.max(1, args.completedDaysAgo) * 24 * 60 * 60 * 1000,
+  );
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      workspaceId: args.workspaceId,
+      outcome: "completed",
+      startsAt: {
+        lte: cutoff,
+      },
+      contact: {
+        OR: [{ phone: { not: null } }, { email: { not: null } }],
+      },
+    },
+    include: {
+      contact: true,
+    },
+    orderBy: { startsAt: "desc" },
+    take: Math.max((args.limit ?? 25) * 4, 50),
+  });
+
+  const seenContactIds = new Set<string>();
+  const candidates: ReviewRequestCandidate[] = [];
+
+  for (const appointment of appointments) {
+    if (seenContactIds.has(appointment.contactId)) {
+      continue;
+    }
+
+    const destination = appointment.contact.phone ?? appointment.contact.email;
+
+    if (!destination) {
+      continue;
+    }
+
+    candidates.push({
+      workspaceId: appointment.workspaceId,
+      contactId: appointment.contactId,
+      appointmentId: appointment.id,
+      firstName: appointment.contact.firstName,
+      channel: appointment.contact.phone ? "sms" : "email",
+      destination,
+      completedVisitAt: appointment.startsAt.toISOString(),
+    });
+    seenContactIds.add(appointment.contactId);
+
+    if (candidates.length >= (args.limit ?? 25)) {
+      break;
+    }
+  }
+
+  return candidates;
+}
+
 export async function getMostRecentLeadForContact(args: {
   workspaceId: string;
   contactId: string;
@@ -1420,6 +1519,182 @@ export async function getReactivationOutcomeReport(args: {
     repliedCount: outcomes.filter((outcome) => outcome.replied).length,
     qualifiedCount: outcomes.filter((outcome) => outcome.qualified).length,
     bookedCount: outcomes.filter((outcome) => outcome.booked).length,
+    outcomes,
+  };
+}
+
+function isPromoterSignal(messageBody: string): boolean {
+  const normalized = messageBody.toLowerCase();
+
+  return (
+    /\b5\b/.test(normalized) ||
+    normalized.includes("great") ||
+    normalized.includes("amazing") ||
+    normalized.includes("awesome") ||
+    normalized.includes("love")
+  );
+}
+
+function isReferralIntentSignal(messageBody: string): boolean {
+  const normalized = messageBody.toLowerCase();
+
+  return (
+    normalized.includes("refer") ||
+    normalized.includes("referral") ||
+    normalized.includes("friend") ||
+    normalized.includes("family")
+  );
+}
+
+export async function getReviewReferralOutcomeReport(args: {
+  workspaceId: string;
+  campaignKey?: string;
+  runId?: string;
+  limit?: number;
+}): Promise<ReviewReferralOutcomeReport> {
+  const queuedEvents = await prisma.event.findMany({
+    where: {
+      workspaceId: args.workspaceId,
+      name: "message.outbound_queued",
+    },
+    orderBy: { occurredAt: "desc" },
+    take: Math.max(1, Math.min(args.limit ?? 100, 250)),
+  });
+  const reviewQueuedEvents = queuedEvents.filter((event) => {
+    const payload = event.payload as unknown as MessageOutboundQueuedPayload;
+
+    if (payload.reason !== "reviews_referrals.post-visit-request") {
+      return false;
+    }
+
+    if (args.campaignKey && payload.campaignKey !== args.campaignKey) {
+      return false;
+    }
+
+    if (args.runId && payload.runId !== args.runId) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (reviewQueuedEvents.length === 0) {
+    return {
+      workspaceId: args.workspaceId,
+      ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
+      ...(args.runId ? { runId: args.runId } : {}),
+      queuedCount: 0,
+      deliveredCount: 0,
+      repliedCount: 0,
+      promoterCount: 0,
+      referralIntentCount: 0,
+      outcomes: [],
+    };
+  }
+
+  const contactIds = [...new Set(
+    reviewQueuedEvents.map((event) =>
+      (event.payload as unknown as MessageOutboundQueuedPayload).contactId,
+    ),
+  )];
+  const queuedEventIds = reviewQueuedEvents.map((event) => event.id);
+  const earliestQueuedAt = reviewQueuedEvents.reduce(
+    (earliest, event) =>
+      event.occurredAt < earliest ? event.occurredAt : earliest,
+    reviewQueuedEvents[0]!.occurredAt,
+  );
+  const [contacts, deliveredEvents, inboundMessages] =
+    await Promise.all([
+      prisma.contact.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          id: { in: contactIds },
+        },
+      }),
+      prisma.event.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          name: "message.delivered",
+          occurredAt: {
+            gte: earliestQueuedAt,
+          },
+        },
+      }),
+      prisma.message.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          contactId: { in: contactIds },
+          direction: "inbound",
+          createdAt: {
+            gte: earliestQueuedAt,
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+  const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
+  const deliveredByQueuedEventId = new Map(
+    deliveredEvents
+      .map((event) => {
+        const payload = event.payload as unknown as MessageDeliveredPayload;
+        return [payload.queuedEventId, payload] as const;
+      })
+      .filter(([queuedEventId]) => queuedEventIds.includes(queuedEventId)),
+  );
+  const inboundByContactId = new Map<string, typeof inboundMessages>();
+  for (const message of inboundMessages) {
+    const entries = inboundByContactId.get(message.contactId) ?? [];
+    entries.push(message);
+    inboundByContactId.set(message.contactId, entries);
+  }
+
+  const outcomes = reviewQueuedEvents.map((event) => {
+    const payload = event.payload as unknown as MessageOutboundQueuedPayload;
+    const contact = contactById.get(payload.contactId);
+    const delivered = deliveredByQueuedEventId.get(event.id);
+    const deliveredAt = delivered?.deliveredAt;
+    const replies = (inboundByContactId.get(payload.contactId) ?? []).filter(
+      (message) => message.createdAt >= event.occurredAt,
+    );
+    const firstReply = replies[0];
+    const promoterReply = replies.find((reply) => isPromoterSignal(reply.body));
+    const referralReply = replies.find((reply) =>
+      isReferralIntentSignal(reply.body),
+    );
+
+    return {
+      queuedEventId: event.id,
+      contactId: payload.contactId,
+      firstName: contact?.firstName ?? "Unknown",
+      channel: payload.channel,
+      destination: payload.destination,
+      ...(payload.campaignKey ? { campaignKey: payload.campaignKey } : {}),
+      ...(payload.runId ? { runId: payload.runId } : {}),
+      queuedAt: event.occurredAt.toISOString(),
+      ...(deliveredAt ? { deliveredAt } : {}),
+      replied: Boolean(firstReply),
+      ...(firstReply ? { repliedAt: firstReply.createdAt.toISOString() } : {}),
+      promoter: Boolean(promoterReply),
+      ...(promoterReply
+        ? { promoterAt: promoterReply.createdAt.toISOString() }
+        : {}),
+      referralIntent: Boolean(referralReply),
+      ...(referralReply
+        ? { referralIntentAt: referralReply.createdAt.toISOString() }
+        : {}),
+    } satisfies ReviewReferralOutcomeRecord;
+  });
+
+  return {
+    workspaceId: args.workspaceId,
+    ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
+    ...(args.runId ? { runId: args.runId } : {}),
+    queuedCount: outcomes.length,
+    deliveredCount: outcomes.filter((outcome) => outcome.deliveredAt).length,
+    repliedCount: outcomes.filter((outcome) => outcome.replied).length,
+    promoterCount: outcomes.filter((outcome) => outcome.promoter).length,
+    referralIntentCount: outcomes.filter((outcome) => outcome.referralIntent)
+      .length,
     outcomes,
   };
 }

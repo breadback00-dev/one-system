@@ -7,6 +7,7 @@
     "@one-system/database": "0.1.0",
     "@one-system/domain": "0.1.0",
     "@one-system/reactivation": "0.1.0",
+    "@one-system/reviews-referrals": "0.1.0",
     "@one-system/workflows": "0.1.0"
   },
   "scripts": {

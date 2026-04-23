@@ -14,6 +14,7 @@ import {
   getMostRecentLeadForContact,
   getPendingWorkflowMessagesForContact,
   getReactivationOutcomeReport,
+  getReviewReferralOutcomeReport,
   getRecentEvents,
   importReactivationContacts,
   markLeadQualified,
@@ -41,6 +42,10 @@ import {
   executeReactivationRun,
   previewReactivationRun,
 } from "@one-system/reactivation";
+import {
+  executeReviewsReferralsRun,
+  previewReviewsReferralsRun,
+} from "@one-system/reviews-referrals";
 import {
   parseTwilioInboundMessage,
   validateTwilioWebhookRequest,
@@ -77,6 +82,14 @@ interface ReactivationRunBody {
   audienceSegment?: ReactivationAudienceSegment;
 }
 
+interface ReviewsReferralsRunBody {
+  workspaceId?: string;
+  completedDaysAgo?: number;
+  limit?: number;
+  cooldownDays?: number;
+  campaignKey?: string;
+}
+
 interface AppointmentRequestBody {
   workspaceId?: string;
   contactId?: string;
@@ -86,6 +99,13 @@ interface AppointmentRequestBody {
 }
 
 interface ReactivationReportQuery {
+  workspaceId: string;
+  campaignKey?: string;
+  runId?: string;
+  limit: number;
+}
+
+interface ReviewsReferralsReportQuery {
   workspaceId: string;
   campaignKey?: string;
   runId?: string;
@@ -260,6 +280,29 @@ function validateReactivationRunInput(body: ReactivationRunBody) {
   };
 }
 
+function validateReviewsReferralsRunInput(body: ReviewsReferralsRunBody) {
+  const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
+  const completedDaysAgo = Number.isFinite(body.completedDaysAgo)
+    ? Math.max(1, Math.min(120, Math.floor(body.completedDaysAgo as number)))
+    : 2;
+  const limit = Number.isFinite(body.limit)
+    ? Math.max(1, Math.min(100, Math.floor(body.limit as number)))
+    : 25;
+  const cooldownDays = Number.isFinite(body.cooldownDays)
+    ? Math.max(1, Math.min(90, Math.floor(body.cooldownDays as number)))
+    : 14;
+  const campaignKey =
+    body.campaignKey?.trim() || "reviews-referrals-default";
+
+  return {
+    workspaceId,
+    completedDaysAgo,
+    limit,
+    cooldownDays,
+    campaignKey,
+  };
+}
+
 function parseCsvRows(input: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -418,6 +461,36 @@ function validateReactivationReadinessQuery(requestUrl: URL) {
   };
 }
 
+function validateReviewsReferralsReadinessQuery(requestUrl: URL) {
+  const completedDaysAgo = Number.parseInt(
+    requestUrl.searchParams.get("completedDaysAgo") ?? "2",
+    10,
+  );
+  const limit = Number.parseInt(requestUrl.searchParams.get("limit") ?? "25", 10);
+  const cooldownDays = Number.parseInt(
+    requestUrl.searchParams.get("cooldownDays") ?? "14",
+    10,
+  );
+
+  return {
+    workspaceId:
+      requestUrl.searchParams.get("workspaceId")?.trim() ||
+      "workspace_medspa_demo",
+    completedDaysAgo: Number.isFinite(completedDaysAgo)
+      ? Math.max(1, Math.min(120, Math.floor(completedDaysAgo)))
+      : 2,
+    limit: Number.isFinite(limit)
+      ? Math.max(1, Math.min(100, Math.floor(limit)))
+      : 25,
+    cooldownDays: Number.isFinite(cooldownDays)
+      ? Math.max(1, Math.min(90, Math.floor(cooldownDays)))
+      : 14,
+    campaignKey:
+      requestUrl.searchParams.get("campaignKey")?.trim() ||
+      "reviews-referrals-default",
+  };
+}
+
 function validateAppointmentInput(body: AppointmentRequestBody) {
   const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
   const contactId = body.contactId?.trim();
@@ -450,6 +523,27 @@ function validateAppointmentInput(body: AppointmentRequestBody) {
 }
 
 function validateReactivationReportQuery(requestUrl: URL): ReactivationReportQuery {
+  const workspaceId =
+    requestUrl.searchParams.get("workspaceId")?.trim() || "workspace_medspa_demo";
+  const campaignKey = requestUrl.searchParams.get("campaignKey")?.trim() || undefined;
+  const runId = requestUrl.searchParams.get("runId")?.trim() || undefined;
+  const limitParam = requestUrl.searchParams.get("limit");
+  const parsedLimit = limitParam ? Number.parseInt(limitParam, 10) : Number.NaN;
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.max(1, Math.min(250, parsedLimit))
+    : 100;
+
+  return {
+    workspaceId,
+    ...(campaignKey ? { campaignKey } : {}),
+    ...(runId ? { runId } : {}),
+    limit,
+  };
+}
+
+function validateReviewsReferralsReportQuery(
+  requestUrl: URL,
+): ReviewsReferralsReportQuery {
   const workspaceId =
     requestUrl.searchParams.get("workspaceId")?.trim() || "workspace_medspa_demo";
   const campaignKey = requestUrl.searchParams.get("campaignKey")?.trim() || undefined;
@@ -605,10 +699,30 @@ const server = createServer(async (request, response) => {
 
     if (
       request.method === "GET" &&
+      requestUrl.pathname === "/reviews-referrals/report"
+    ) {
+      const query = validateReviewsReferralsReportQuery(requestUrl);
+      const report = await getReviewReferralOutcomeReport(query);
+      sendJson(response, 200, report);
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
       requestUrl.pathname === "/reactivation/readiness"
     ) {
       const query = validateReactivationReadinessQuery(requestUrl);
       const readiness = await previewReactivationRun(query);
+      sendJson(response, 200, readiness);
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/reviews-referrals/readiness"
+    ) {
+      const query = validateReviewsReferralsReadinessQuery(requestUrl);
+      const readiness = await previewReviewsReferralsRun(query);
       sendJson(response, 200, readiness);
       return;
     }
@@ -678,6 +792,17 @@ const server = createServer(async (request, response) => {
       const body = await readJsonBody<ReactivationRunBody>(request);
       const input = validateReactivationRunInput(body);
       const result = await executeReactivationRun(input);
+      sendJson(response, 201, result);
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      requestUrl.pathname === "/reviews-referrals/run"
+    ) {
+      const body = await readJsonBody<ReviewsReferralsRunBody>(request);
+      const input = validateReviewsReferralsRunInput(body);
+      const result = await executeReviewsReferralsRun(input);
       sendJson(response, 201, result);
       return;
     }

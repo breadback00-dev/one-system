@@ -14,6 +14,7 @@
   "dependencies": {
     "@one-system/database": "0.1.0",
     "@one-system/reactivation": "0.1.0",
+    "@one-system/reviews-referrals": "0.1.0",
     "@one-system/ui": "0.1.0",
     "next": "^15.5.4",
     "react": "^19.1.1",

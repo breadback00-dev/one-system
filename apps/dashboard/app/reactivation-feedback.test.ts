@@ -5,6 +5,10 @@ import {
   getReactivationRunErrorMessage,
   getReactivationRunFeedback,
 } from "./reactivation-feedback";
+import {
+  getReviewsRunErrorMessage,
+  getReviewsRunFeedback,
+} from "./reviews-referrals-feedback";
 
 function testReactivationRunFeedbackQueued() {
   const feedback = getReactivationRunFeedback({
@@ -60,13 +64,51 @@ function testQueueActionFeedbackInvalidShape() {
   assert.equal(feedback, null);
 }
 
+function testReviewsRunFeedbackQueued() {
+  const feedback = getReviewsRunFeedback({
+    reviewsRun: "queued",
+    campaignKey: "reviews-q2",
+    runId: "run-xyz",
+    queuedCount: "4",
+    skippedCount: "1",
+    completedDaysAgo: "3",
+  });
+
+  assert.ok(feedback, "Expected queued reviews run feedback to be present.");
+  assert.equal(feedback.campaignKey, "reviews-q2");
+  assert.equal(feedback.runId, "run-xyz");
+  assert.equal(feedback.queuedCount, "4");
+  assert.equal(feedback.skippedCount, "1");
+  assert.equal(feedback.cooldownDays, "14");
+  assert.equal(feedback.completedDaysAgo, "3");
+}
+
+function testReviewsRunFeedbackNotQueued() {
+  const feedback = getReviewsRunFeedback({
+    reviewsRun: "error",
+  });
+
+  assert.equal(feedback, null);
+}
+
+function testReviewsRunErrorFallback() {
+  const error = getReviewsRunErrorMessage({
+    reviewsRun: "error",
+  });
+
+  assert.equal(error, "Unable to queue the reviews/referrals campaign.");
+}
+
 function run() {
   testReactivationRunFeedbackQueued();
   testReactivationRunFeedbackNotQueued();
   testReactivationRunErrorFallback();
   testQueueActionFeedbackDefaults();
   testQueueActionFeedbackInvalidShape();
-  console.log("[dashboard] reactivation feedback tests passed");
+  testReviewsRunFeedbackQueued();
+  testReviewsRunFeedbackNotQueued();
+  testReviewsRunErrorFallback();
+  console.log("[dashboard] feedback parser tests passed");
 }
 
 run();

@@ -3,6 +3,7 @@ import {
   getAvailableBookingSlots,
   getReactivationActionQueue,
   getReactivationOutcomeReport,
+  getReviewReferralOutcomeReport,
   getRecentReactivationRunSummaries,
   getRecentAppointmentOverview,
   getRecentConversationThreads,
@@ -17,13 +18,19 @@ import {
   bookReactivationItemAtSlot,
   markReactivationItemHandled,
   runReactivationCampaign,
+  runReviewsReferralsCampaign,
 } from "./actions";
 import { previewReactivationRun } from "@one-system/reactivation";
+import { previewReviewsReferralsRun } from "@one-system/reviews-referrals";
 import {
   getQueueActionFeedback,
   getReactivationRunErrorMessage,
   getReactivationRunFeedback,
 } from "./reactivation-feedback";
+import {
+  getReviewsRunErrorMessage,
+  getReviewsRunFeedback,
+} from "./reviews-referrals-feedback";
 
 const modules = [
   "Lead Capture + Instant Follow-Up",
@@ -79,6 +86,18 @@ function getReadinessLabel(status: string) {
   }
 
   return "Ready contacts are available for outreach.";
+}
+
+function getReviewsReadinessLabel(status: string) {
+  if (status === "no_candidates") {
+    return "No completed-visit contacts match the current request window.";
+  }
+
+  if (status === "cooldown_blocked") {
+    return "All matching contacts were recently reached for this campaign key.";
+  }
+
+  return "Ready contacts are available for review/referral outreach.";
 }
 
 function getModule2ReadinessChecks(args: {
@@ -149,12 +168,16 @@ export default async function HomePage({
   const reactivationRunErrorMessage =
     getReactivationRunErrorMessage(resolvedSearchParams);
   const queueActionFeedback = getQueueActionFeedback(resolvedSearchParams);
+  const reviewsRunFeedback = getReviewsRunFeedback(resolvedSearchParams);
+  const reviewsRunErrorMessage = getReviewsRunErrorMessage(resolvedSearchParams);
   const [
     deliveryStatus,
     funnelSnapshot,
     reactivationBookingSlots,
     defaultReactivationReadiness,
+    defaultReviewsReadiness,
     reactivationSnapshot,
+    reviewsSnapshot,
     reactivationRuns,
     reactivationQueue,
     reactivationImports,
@@ -178,7 +201,18 @@ export default async function HomePage({
       campaignKey: "reactivation-default",
       audienceSegment: "all",
     }),
+    previewReviewsReferralsRun({
+      workspaceId: "workspace_medspa_demo",
+      completedDaysAgo: 2,
+      limit: 25,
+      cooldownDays: 14,
+      campaignKey: "reviews-referrals-default",
+    }),
     getReactivationOutcomeReport({
+      workspaceId: "workspace_medspa_demo",
+      limit: 25,
+    }),
+    getReviewReferralOutcomeReport({
       workspaceId: "workspace_medspa_demo",
       limit: 25,
     }),
@@ -369,6 +403,61 @@ export default async function HomePage({
           </div>
         </SectionCard>
 
+        <SectionCard title="Reviews & Referrals Outcomes">
+          <div className="stats-grid">
+            <div className="stat">
+              <span className="stat-label">Queued</span>
+              <strong>{reviewsSnapshot.queuedCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Delivered</span>
+              <strong>{reviewsSnapshot.deliveredCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Replied</span>
+              <strong>{reviewsSnapshot.repliedCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Promoters</span>
+              <strong>{reviewsSnapshot.promoterCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Referral intent</span>
+              <strong>{reviewsSnapshot.referralIntentCount}</strong>
+            </div>
+          </div>
+          <div className="list-block">
+            {reviewsSnapshot.outcomes.length === 0 ? (
+              <p>No review/referral activity recorded yet.</p>
+            ) : (
+              reviewsSnapshot.outcomes.slice(0, 4).map((outcome) => (
+                <div className="list-row" key={outcome.queuedEventId}>
+                  <div>
+                    <strong>{outcome.firstName}</strong>
+                    <p>
+                      {outcome.channel.toUpperCase()} • {outcome.destination}
+                    </p>
+                  </div>
+                  <div className="row-meta">
+                    <span className="pill">
+                      {outcome.referralIntent
+                        ? "referral intent"
+                        : outcome.promoter
+                          ? "promoter"
+                          : outcome.replied
+                            ? "replied"
+                            : outcome.deliveredAt
+                              ? "delivered"
+                              : "queued"}
+                    </span>
+                    <time>{formatRelativeIso(outcome.queuedAt)}</time>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </SectionCard>
+
         <SectionCard title="Run Reactivation Campaign">
           {reactivationRunFeedback ? (
             <div className="notice-card">
@@ -499,6 +588,131 @@ export default async function HomePage({
               <label>
                 Inactive days
                 <input defaultValue="30" min="7" name="inactiveDays" type="number" />
+              </label>
+              <label>
+                Limit
+                <input defaultValue="25" min="1" max="100" name="limit" type="number" />
+              </label>
+              <label>
+                Cooldown days
+                <input
+                  defaultValue="14"
+                  min="1"
+                  max="90"
+                  name="cooldownDays"
+                  type="number"
+                />
+              </label>
+            </div>
+            <button className="text-button" type="submit">
+              Queue campaign
+            </button>
+          </form>
+        </SectionCard>
+
+        <SectionCard title="Run Reviews & Referrals Campaign">
+          {reviewsRunFeedback ? (
+            <div className="notice-card">
+              <strong>Campaign run processed</strong>
+              <p>
+                {reviewsRunFeedback.campaignKey} • Run{" "}
+                {reviewsRunFeedback.runId.slice(0, 8)}
+              </p>
+              <p>{getReviewsReadinessLabel(reviewsRunFeedback.readinessStatus)}</p>
+              <div className="mini-stats">
+                <div>
+                  <span>Candidates</span>
+                  <strong>{reviewsRunFeedback.candidateCount}</strong>
+                </div>
+                <div>
+                  <span>Queued</span>
+                  <strong>{reviewsRunFeedback.queuedCount}</strong>
+                </div>
+                <div>
+                  <span>Skipped</span>
+                  <strong>{reviewsRunFeedback.skippedCount}</strong>
+                </div>
+                <div>
+                  <span>Cooldown</span>
+                  <strong>{reviewsRunFeedback.cooldownDays}d</strong>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {reviewsRunErrorMessage ? (
+            <div className="notice-card notice-error">
+              <strong>Campaign run blocked</strong>
+              <p>{reviewsRunErrorMessage}</p>
+              <p>Review the campaign inputs and try again.</p>
+            </div>
+          ) : null}
+          <p className="action-warning">
+            Queues post-visit feedback and referral-interest outreach for completed
+            visits. Recent sends for the same campaign key are skipped by cooldown.
+          </p>
+          <div className="readiness-card">
+            <div>
+              <span className="stat-label">Default readiness</span>
+              <strong>
+                {getReviewsReadinessLabel(defaultReviewsReadiness.readinessStatus)}
+              </strong>
+              <p>
+                Previewing completed visits from at least 2 days ago, 25-contact
+                limit, and 14-day cooldown before queueing outreach.
+              </p>
+            </div>
+            <div className="mini-stats">
+              <div>
+                <span>Eligible</span>
+                <strong>{defaultReviewsReadiness.eligibleCount}</strong>
+              </div>
+              <div>
+                <span>Cooldown</span>
+                <strong>{defaultReviewsReadiness.skippedCount}</strong>
+              </div>
+              <div>
+                <span>Candidates</span>
+                <strong>{defaultReviewsReadiness.candidateCount}</strong>
+              </div>
+              <div>
+                <span>Window</span>
+                <strong>{defaultReviewsReadiness.completedDaysAgo}d</strong>
+              </div>
+            </div>
+            {defaultReviewsReadiness.candidates.length > 0 ? (
+              <div className="preview-list">
+                <span className="stat-label">Ready audience preview</span>
+                {defaultReviewsReadiness.candidates.slice(0, 3).map((candidate) => (
+                  <div className="preview-row" key={candidate.contactId}>
+                    <strong>{candidate.firstName}</strong>
+                    <span>
+                      {candidate.channel.toUpperCase()} • Completed{" "}
+                      {formatRelativeIso(candidate.completedVisitAt)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <form action={runReviewsReferralsCampaign} className="control-form">
+            <label>
+              Campaign key
+              <input
+                defaultValue="reviews-referrals-default"
+                name="campaignKey"
+                type="text"
+              />
+            </label>
+            <div className="form-grid">
+              <label>
+                Completed days ago
+                <input
+                  defaultValue="2"
+                  min="1"
+                  max="120"
+                  name="completedDaysAgo"
+                  type="number"
+                />
               </label>
               <label>
                 Limit

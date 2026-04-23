@@ -13,6 +13,7 @@ import {
 } from "@one-system/database";
 import { createAppointment } from "@one-system/domain";
 import { executeReactivationRun } from "@one-system/reactivation";
+import { executeReviewsReferralsRun } from "@one-system/reviews-referrals";
 
 const DASHBOARD_PATH = "/";
 
@@ -248,6 +249,63 @@ export async function runReactivationCampaign(formData: FormData) {
     eligiblePastCustomerCount: String(
       result.segmentBreakdown.eligiblePastCustomerCount,
     ),
+  });
+  redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+}
+
+export async function runReviewsReferralsCampaign(formData: FormData) {
+  const campaignKey =
+    String(formData.get("campaignKey") ?? "").trim() ||
+    "reviews-referrals-default";
+  const completedDaysAgo = Number.parseInt(
+    String(formData.get("completedDaysAgo") ?? "2"),
+    10,
+  );
+  const limit = Number.parseInt(String(formData.get("limit") ?? "25"), 10);
+  const cooldownDays = Number.parseInt(
+    String(formData.get("cooldownDays") ?? "14"),
+    10,
+  );
+
+  let result: Awaited<ReturnType<typeof executeReviewsReferralsRun>>;
+
+  try {
+    result = await executeReviewsReferralsRun({
+      workspaceId: "workspace_medspa_demo",
+      completedDaysAgo: Number.isFinite(completedDaysAgo)
+        ? Math.max(1, Math.min(120, Math.floor(completedDaysAgo)))
+        : 2,
+      limit: Number.isFinite(limit)
+        ? Math.max(1, Math.min(100, Math.floor(limit)))
+        : 25,
+      cooldownDays: Number.isFinite(cooldownDays)
+        ? Math.max(1, Math.min(90, Math.floor(cooldownDays)))
+        : 14,
+      campaignKey,
+    });
+  } catch (error) {
+    revalidatePath(DASHBOARD_PATH);
+    const params = new URLSearchParams({
+      reviewsRun: "error",
+      reviewsRunMessage: formatFeedbackMessage(
+        error,
+        "Unable to queue the reviews/referrals campaign.",
+      ),
+    });
+    redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+  }
+
+  revalidatePath(DASHBOARD_PATH);
+  const params = new URLSearchParams({
+    reviewsRun: "queued",
+    campaignKey: result.campaignKey,
+    runId: result.runId,
+    candidateCount: String(result.candidateCount),
+    skippedCount: String(result.skippedCount),
+    queuedCount: String(result.queuedCount),
+    cooldownDays: String(result.cooldownDays),
+    completedDaysAgo: String(result.completedDaysAgo),
+    readinessStatus: result.readinessStatus,
   });
   redirect(`${DASHBOARD_PATH}?${params.toString()}`);
 }
