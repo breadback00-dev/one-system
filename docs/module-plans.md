@@ -61,6 +61,7 @@ Completed checkpoints:
 - referral-source extraction now includes confidence handling and stricter parser boundaries
 - dashboard now shows Module 3 readiness checks plus referral-source capture quality counts
 - focused regression tests now cover domain sentiment/source parsing and module routing decisions
+- seeded local proof run on 2026-04-23 validated post-visit queueing, referral-intent reply routing, and high-confidence referral source capture end-to-end
 
 Exit criteria:
 

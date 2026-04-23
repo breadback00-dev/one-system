@@ -102,6 +102,8 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 - the dashboard now includes a Module 3 readiness checklist for eligible audience, campaign execution, inbound replies, follow-up routing, and referral source visibility
 - Module 3 reply routing now runs through a dedicated evaluation helper with module-level regression tests (`modules/reviews_referrals/src/routing.test.ts`)
 - Module 3 outcomes now include referral-source capture quality counts (high/medium/low confidence) for operator monitoring
+- local Module 3 proof run on 2026-04-23 queued one post-visit request, processed one referral-intent reply, queued one referral follow-up, and captured one high-confidence referral source
+- local Module 3 readiness evidence on 2026-04-23 shows all five checklist checks as ready (`eligible=3`, `queued=1`, `replied=1`, `routingActions=1`, `capturedSources=1`)
 - roadmap and product spec module ordering are now aligned (Paid Ads before Sales Enablement)
 - module folders for all five product areas
 - canonical per-module execution plan in `docs/module-plans.md`
