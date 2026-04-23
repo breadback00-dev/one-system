@@ -10,6 +10,7 @@ import {
   classifyReviewReferralReplySignals,
   createQueuedOutboundMessageEvent,
   createReviewReferralSourceCapturedEvent,
+  extractReviewReferralSourceDetails,
   type ReviewReferralSourceCapturedPayload,
 } from "@one-system/domain";
 import {
@@ -122,6 +123,7 @@ export interface RouteReviewsReferralsReplyResult {
   referralSourceCapturedEventId?: string;
   referredName?: string;
   referredContact?: string;
+  referralSourceCaptureConfidence?: ReviewReferralSourceCapturedPayload["captureConfidence"];
 }
 
 export interface CreateReviewResponseDraftInput {
@@ -212,50 +214,6 @@ function getDeliverAfterIso(args: {
 
 function normalizeFreeText(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function extractReferralContact(messageBody: string): string | undefined {
-  const emailMatch = messageBody.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  if (emailMatch?.[0]) {
-    return emailMatch[0].toLowerCase();
-  }
-
-  const phoneMatch = messageBody.match(/\+?\d[\d\s().-]{6,}\d/);
-  if (!phoneMatch?.[0]) {
-    return undefined;
-  }
-
-  const normalized = phoneMatch[0].replace(/[^\d+]/g, "");
-
-  return normalized.length >= 7 ? normalized : undefined;
-}
-
-function toDisplayName(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .map((part) => part[0]?.toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
-}
-
-function extractReferralName(messageBody: string): string | undefined {
-  const explicitMatch = messageBody.match(
-    /\b(?:name is|named|it's|its)\s+([a-z][a-z' -]{1,40})/i,
-  );
-
-  if (explicitMatch?.[1]) {
-    return toDisplayName(explicitMatch[1]);
-  }
-
-  const leadingMatch = messageBody.match(
-    /^\s*([a-z][a-z' -]{1,40})\s*(?:,|-|\/|\(|\d|[A-Z0-9._%+-]+@)/i,
-  );
-
-  if (leadingMatch?.[1]) {
-    return toDisplayName(leadingMatch[1]);
-  }
-
-  return undefined;
 }
 
 function getPromoterFollowUpMessage(): string {
@@ -499,8 +457,13 @@ export async function routeReviewsReferralsReply(
   }
 
   const normalizedMessage = normalizeFreeText(input.messageBody);
-  const referredName = extractReferralName(input.messageBody);
-  const referredContact = extractReferralContact(input.messageBody);
+  const referralSourceDetails = extractReviewReferralSourceDetails(
+    input.messageBody,
+  );
+  const referredName = referralSourceDetails.referredName;
+  const referredContact = referralSourceDetails.referredContact;
+  const referralSourceCaptureConfidence =
+    referralSourceDetails.captureConfidence;
   const feedbackSignals = classifyReviewReferralReplySignals(input.messageBody);
   const promoterFeedback = feedbackSignals.promoter;
   const recoveryFeedback = feedbackSignals.recovery;
@@ -513,8 +476,13 @@ export async function routeReviewsReferralsReply(
   const hasRecentReferralFollowUp = recentReferralFollowUps.some(
     (event) => event.contactId === input.contactId,
   );
+  const confidenceEligibleForCapture =
+    referralSourceCaptureConfidence === "high" ||
+    referralSourceCaptureConfidence === "medium" ||
+    hasRecentReferralFollowUp;
   const canCaptureReferralSource = Boolean(referredName || referredContact) &&
-    (referralIntentFeedback || hasRecentReferralFollowUp);
+    (referralIntentFeedback || hasRecentReferralFollowUp) &&
+    confidenceEligibleForCapture;
   let capturedReferralSourceEvent:
     | ReturnType<typeof createReviewReferralSourceCapturedEvent>
     | undefined;
@@ -540,6 +508,9 @@ export async function routeReviewsReferralsReply(
         sourceMessageNormalized: normalizedMessage,
         ...(referredName ? { referredName } : {}),
         ...(referredContact ? { referredContact } : {}),
+        ...(referralSourceCaptureConfidence
+          ? { captureConfidence: referralSourceCaptureConfidence }
+          : {}),
         ...(recentRequestForContact.campaignKey
           ? { campaignKey: recentRequestForContact.campaignKey }
           : {}),
@@ -588,6 +559,12 @@ export async function routeReviewsReferralsReply(
         ? {
             referralSourceCaptured: true,
             referralSourceCapturedEventId: capturedReferralSourceEvent.id,
+            ...(referralSourceCaptureConfidence
+              ? {
+                  referralSourceCaptureConfidence:
+                    referralSourceCaptureConfidence,
+                }
+              : {}),
           }
         : {}),
       ...(referredName ? { referredName } : {}),
@@ -623,6 +600,12 @@ export async function routeReviewsReferralsReply(
         ? {
             referralSourceCaptured: true,
             referralSourceCapturedEventId: capturedReferralSourceEvent.id,
+            ...(referralSourceCaptureConfidence
+              ? {
+                  referralSourceCaptureConfidence:
+                    referralSourceCaptureConfidence,
+                }
+              : {}),
           }
         : {}),
       ...(referredName ? { referredName } : {}),
@@ -661,6 +644,12 @@ export async function routeReviewsReferralsReply(
       ? {
           referralSourceCaptured: true,
           referralSourceCapturedEventId: capturedReferralSourceEvent.id,
+          ...(referralSourceCaptureConfidence
+            ? {
+                referralSourceCaptureConfidence:
+                  referralSourceCaptureConfidence,
+              }
+            : {}),
         }
       : {}),
     ...(referredName ? { referredName } : {}),

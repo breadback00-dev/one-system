@@ -626,6 +626,7 @@ export interface ReviewReferralOutcomeRecord {
   referralSourceCapturedAt?: string;
   referredName?: string;
   referredContact?: string;
+  referralSourceCaptureConfidence?: ReviewReferralSourceCapturedPayload["captureConfidence"];
 }
 
 export interface ReviewReferralOutcomeReport {
@@ -1893,6 +1894,9 @@ export async function getReviewReferralOutcomeReport(args: {
         : {}),
       ...(referralSourcePayload?.referredContact
         ? { referredContact: referralSourcePayload.referredContact }
+        : {}),
+      ...(referralSourcePayload?.captureConfidence
+        ? { referralSourceCaptureConfidence: referralSourcePayload.captureConfidence }
         : {}),
     } satisfies ReviewReferralOutcomeRecord;
   });

@@ -12,5 +12,6 @@ Post-visit review flows, referral sequences, and reputation growth logic.
 - Exposes latest reply context in outcomes so operators can draft responses directly from real feedback.
 - Tracks queued promoter, referral, and recovery follow-up actions in outcomes reporting.
 - Uses shared mixed-sentiment gating so recovery signals override promoter/referral routing on ambiguous feedback.
+- Captures referral source details with confidence scoring (high/medium/low) to reduce low-signal operator noise.
 - Applies campaign-key cooldown checks before queueing repeat requests.
 - Reports queued, delivered, replied, promoter-signal, and referral-intent outcomes.

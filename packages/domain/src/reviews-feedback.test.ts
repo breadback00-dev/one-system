@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { classifyReviewReferralReplySignals } from "./reviews-feedback";
+import {
+  classifyReviewReferralReplySignals,
+  extractReviewReferralSourceDetails,
+} from "./reviews-feedback";
 
 function testPromoterOnlySignal() {
   const signals = classifyReviewReferralReplySignals(
@@ -57,12 +60,56 @@ function testReferralSignalBlockedByRecovery() {
   assert.equal(signals.mixedSentiment, false);
 }
 
+function testSourceExtractionHighConfidenceFromContact() {
+  const details = extractReviewReferralSourceDetails(
+    "Her name is Sara and her phone is +44 (20) 1234-5678.",
+  );
+
+  assert.equal(details.referredName, "Sara");
+  assert.equal(details.referredContact, "+442012345678");
+  assert.equal(details.captureConfidence, "high");
+}
+
+function testSourceExtractionMediumConfidenceFromExplicitName() {
+  const details = extractReviewReferralSourceDetails(
+    "My friend is jasmine.",
+  );
+
+  assert.equal(details.referredName, "Jasmine");
+  assert.equal(details.referredContact, undefined);
+  assert.equal(details.captureConfidence, "medium");
+}
+
+function testSourceExtractionLowConfidenceFromLeadingName() {
+  const details = extractReviewReferralSourceDetails(
+    "jordan, if you can reach out that would be great.",
+  );
+
+  assert.equal(details.referredName, "Jordan");
+  assert.equal(details.referredContact, undefined);
+  assert.equal(details.captureConfidence, "low");
+}
+
+function testSourceExtractionRejectsStopWordLeadingName() {
+  const details = extractReviewReferralSourceDetails(
+    "my friend, 555-123-4567",
+  );
+
+  assert.equal(details.referredName, undefined);
+  assert.equal(details.referredContact, "5551234567");
+  assert.equal(details.captureConfidence, "high");
+}
+
 function run() {
   testPromoterOnlySignal();
   testRecoveryOnlySignal();
   testMixedSignalPrefersRecovery();
   testReferralSignalWhenPositive();
   testReferralSignalBlockedByRecovery();
+  testSourceExtractionHighConfidenceFromContact();
+  testSourceExtractionMediumConfidenceFromExplicitName();
+  testSourceExtractionLowConfidenceFromLeadingName();
+  testSourceExtractionRejectsStopWordLeadingName();
   console.log("[domain] review feedback signal tests passed");
 }
 

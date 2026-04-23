@@ -81,6 +81,7 @@ export interface ReviewReferralSourceCapturedPayload {
   sourceMessageNormalized: string;
   referredName?: string;
   referredContact?: string;
+  captureConfidence?: "high" | "medium" | "low";
   campaignKey?: string;
   runId?: string;
 }

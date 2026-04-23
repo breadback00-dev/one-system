@@ -506,6 +506,9 @@ export default async function HomePage({
                         {outcome.referredContact
                           ? ` • ${outcome.referredContact}`
                           : ""}
+                        {outcome.referralSourceCaptureConfidence
+                          ? ` • ${outcome.referralSourceCaptureConfidence} confidence`
+                          : ""}
                       </p>
                     ) : null}
                   </div>

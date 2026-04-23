@@ -258,6 +258,7 @@ export function createReviewReferralSourceCapturedEvent(args: {
   sourceMessageNormalized: string;
   referredName?: string;
   referredContact?: string;
+  captureConfidence?: "high" | "medium" | "low";
   campaignKey?: string;
   runId?: string;
   capturedAt?: string;
@@ -276,6 +277,9 @@ export function createReviewReferralSourceCapturedEvent(args: {
       sourceMessageNormalized: args.sourceMessageNormalized,
       ...(args.referredName ? { referredName: args.referredName } : {}),
       ...(args.referredContact ? { referredContact: args.referredContact } : {}),
+      ...(args.captureConfidence
+        ? { captureConfidence: args.captureConfidence }
+        : {}),
       ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
       ...(args.runId ? { runId: args.runId } : {}),
     },
