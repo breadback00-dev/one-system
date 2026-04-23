@@ -6,9 +6,14 @@ import {
   type ReviewResponseAction,
   type ReviewResponseConfidence,
 } from "@one-system/ai";
-import { createQueuedOutboundMessageEvent } from "@one-system/domain";
+import {
+  createQueuedOutboundMessageEvent,
+  createReviewReferralSourceCapturedEvent,
+  type ReviewReferralSourceCapturedPayload,
+} from "@one-system/domain";
 import {
   appendEvents,
+  getRecentEventsForContactByName,
   getRecentQueuedMessagesForReason,
   getReviewRequestCandidateForAppointment,
   getReviewRequestCandidates,
@@ -112,6 +117,10 @@ export interface RouteReviewsReferralsReplyResult {
   cooldownDays: number;
   queuedCount: number;
   queuedEventId?: string;
+  referralSourceCaptured?: boolean;
+  referralSourceCapturedEventId?: string;
+  referredName?: string;
+  referredContact?: string;
 }
 
 export interface CreateReviewResponseDraftInput {
@@ -140,6 +149,8 @@ const MINIMUM_POST_VISIT_DELAY_MINUTES = 5;
 const PROMOTER_FOLLOW_UP_REASON = `${reviewsReferralsWorkflow.key}.promoter-follow-up`;
 const REFERRAL_FOLLOW_UP_REASON = `${reviewsReferralsWorkflow.key}.referral-follow-up`;
 const RECOVERY_FOLLOW_UP_REASON = `${reviewsReferralsWorkflow.key}.recovery-follow-up`;
+const REFERRAL_SOURCE_CAPTURED_EVENT_NAME =
+  "reviews_referrals.referral_source_captured";
 const CAMPAIGN_KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 function getReadinessStatus(args: {
@@ -233,6 +244,54 @@ function isReferralIntentFeedback(messageBody: string): boolean {
     normalized.includes("friend") ||
     normalized.includes("family")
   );
+}
+
+function normalizeFreeText(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function extractReferralContact(messageBody: string): string | undefined {
+  const emailMatch = messageBody.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  if (emailMatch?.[0]) {
+    return emailMatch[0].toLowerCase();
+  }
+
+  const phoneMatch = messageBody.match(/\+?\d[\d\s().-]{6,}\d/);
+  if (!phoneMatch?.[0]) {
+    return undefined;
+  }
+
+  const normalized = phoneMatch[0].replace(/[^\d+]/g, "");
+
+  return normalized.length >= 7 ? normalized : undefined;
+}
+
+function toDisplayName(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function extractReferralName(messageBody: string): string | undefined {
+  const explicitMatch = messageBody.match(
+    /\b(?:name is|named|it's|its)\s+([a-z][a-z' -]{1,40})/i,
+  );
+
+  if (explicitMatch?.[1]) {
+    return toDisplayName(explicitMatch[1]);
+  }
+
+  const leadingMatch = messageBody.match(
+    /^\s*([a-z][a-z' -]{1,40})\s*(?:,|-|\/|\(|\d|[A-Z0-9._%+-]+@)/i,
+  );
+
+  if (leadingMatch?.[1]) {
+    return toDisplayName(leadingMatch[1]);
+  }
+
+  return undefined;
 }
 
 function getPromoterFollowUpMessage(): string {
@@ -475,9 +534,58 @@ export async function routeReviewsReferralsReply(
     };
   }
 
+  const normalizedMessage = normalizeFreeText(input.messageBody);
+  const referredName = extractReferralName(input.messageBody);
+  const referredContact = extractReferralContact(input.messageBody);
   const promoterFeedback = isPromoterFeedback(input.messageBody);
   const recoveryFeedback = isRecoveryFeedback(input.messageBody);
   const referralIntentFeedback = isReferralIntentFeedback(input.messageBody);
+  const recentReferralFollowUps = await getRecentQueuedMessagesForReason({
+    workspaceId: input.workspaceId,
+    reason: REFERRAL_FOLLOW_UP_REASON,
+    since: lookbackSince,
+  });
+  const hasRecentReferralFollowUp = recentReferralFollowUps.some(
+    (event) => event.contactId === input.contactId,
+  );
+  const canCaptureReferralSource = Boolean(referredName || referredContact) &&
+    (referralIntentFeedback || hasRecentReferralFollowUp);
+  let capturedReferralSourceEvent:
+    | ReturnType<typeof createReviewReferralSourceCapturedEvent>
+    | undefined;
+
+  if (canCaptureReferralSource) {
+    const recentCapturedSourceEvents = await getRecentEventsForContactByName({
+      workspaceId: input.workspaceId,
+      name: REFERRAL_SOURCE_CAPTURED_EVENT_NAME,
+      contactId: input.contactId,
+      since: lookbackSince,
+      limit: 100,
+    });
+    const isDuplicateCapture = recentCapturedSourceEvents.some((event) => {
+      const payload = event.payload as ReviewReferralSourceCapturedPayload;
+      return payload.sourceMessageNormalized === normalizedMessage;
+    });
+
+    if (!isDuplicateCapture) {
+      capturedReferralSourceEvent = createReviewReferralSourceCapturedEvent({
+        workspaceId: input.workspaceId,
+        contactId: input.contactId,
+        sourceMessage: input.messageBody.trim(),
+        sourceMessageNormalized: normalizedMessage,
+        ...(referredName ? { referredName } : {}),
+        ...(referredContact ? { referredContact } : {}),
+        ...(recentRequestForContact.campaignKey
+          ? { campaignKey: recentRequestForContact.campaignKey }
+          : {}),
+        ...(recentRequestForContact.runId
+          ? { runId: recentRequestForContact.runId }
+          : {}),
+        capturedAt: receivedAt,
+      });
+    }
+  }
+
   const followUp = recoveryFeedback
       ? {
           status: "queued_recovery_follow_up" as const,
@@ -499,6 +607,10 @@ export async function routeReviewsReferralsReply(
       : null;
 
   if (!followUp) {
+    if (capturedReferralSourceEvent) {
+      await appendEvents([capturedReferralSourceEvent]);
+    }
+
     return {
       ok: true,
       status: "ignored_neutral",
@@ -507,6 +619,14 @@ export async function routeReviewsReferralsReply(
         : {}),
       cooldownDays,
       queuedCount: 0,
+      ...(capturedReferralSourceEvent
+        ? {
+            referralSourceCaptured: true,
+            referralSourceCapturedEventId: capturedReferralSourceEvent.id,
+          }
+        : {}),
+      ...(referredName ? { referredName } : {}),
+      ...(referredContact ? { referredContact } : {}),
     };
   }
 
@@ -522,6 +642,10 @@ export async function routeReviewsReferralsReply(
   );
 
   if (wasRecentlyRouted) {
+    if (capturedReferralSourceEvent) {
+      await appendEvents([capturedReferralSourceEvent]);
+    }
+
     return {
       ok: true,
       status: "cooldown_blocked",
@@ -530,6 +654,14 @@ export async function routeReviewsReferralsReply(
         : {}),
       cooldownDays,
       queuedCount: 0,
+      ...(capturedReferralSourceEvent
+        ? {
+            referralSourceCaptured: true,
+            referralSourceCapturedEventId: capturedReferralSourceEvent.id,
+          }
+        : {}),
+      ...(referredName ? { referredName } : {}),
+      ...(referredContact ? { referredContact } : {}),
     };
   }
 
@@ -546,8 +678,10 @@ export async function routeReviewsReferralsReply(
     runId: randomUUID(),
     deliverAfter: receivedAt,
   });
-
-  await appendEvents([queuedEvent]);
+  const eventsToAppend = capturedReferralSourceEvent
+    ? [capturedReferralSourceEvent, queuedEvent]
+    : [queuedEvent];
+  await appendEvents(eventsToAppend);
 
   return {
     ok: true,
@@ -558,6 +692,14 @@ export async function routeReviewsReferralsReply(
     cooldownDays,
     queuedCount: 1,
     queuedEventId: queuedEvent.id,
+    ...(capturedReferralSourceEvent
+      ? {
+          referralSourceCaptured: true,
+          referralSourceCapturedEventId: capturedReferralSourceEvent.id,
+        }
+      : {}),
+    ...(referredName ? { referredName } : {}),
+    ...(referredContact ? { referredContact } : {}),
   };
 }
 

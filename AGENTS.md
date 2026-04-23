@@ -60,6 +60,7 @@ Unified AI customer acquisition platform for med spas first, built to support fi
 
 ## Read When Needed
 - Start of each session: `memory/one_system_SUMMARY.md`
+- Module execution plans: `docs/module-plans.md`
 - Product direction: `docs/product-spec.md`
 - Build sequence: `docs/roadmap.md`
 - System design: `docs/architecture.md`

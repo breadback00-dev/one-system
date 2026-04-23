@@ -1,0 +1,92 @@
+# Module Execution Plans
+
+Use this as the canonical module-by-module execution plan and planning trigger guide.
+
+## Planning Cadence
+
+- Create or refresh the active module plan at the start of each module.
+- Re-plan when scope changes, architecture changes, or acceptance criteria change.
+- Batch work into meaningful checkpoints and verify each checkpoint with typecheck and build before commit.
+- Do not switch modules without explicitly stating the switch first.
+
+## When To Use Plan Mode
+
+Use plan mode before implementation when any of these are true:
+
+- We are starting a new module.
+- We are changing Prisma schema, event contracts, or shared package boundaries.
+- There are multiple valid technical paths with non-obvious tradeoffs.
+- The module checkpoint will span more than one app/package and likely require staged commits.
+- The user asks for roadmap, sequencing, or milestone-level decisions before coding.
+
+## Module 1 - Lead Capture + Instant Follow-Up
+
+Status: Completed baseline end-to-end.
+
+Done checkpoints:
+
+- lead intake API flow to persistence
+- queued outbound follow-up path through worker
+- inbound reply handling and qualification routing
+- dashboard visibility for leads and message timeline
+
+## Module 2 - Database Reactivation
+
+Status: Completed and verified in seeded local workspace.
+
+Done checkpoints:
+
+- audience selection, readiness preview, and campaign queueing
+- import flows (CSV + adapter contract) with audit visibility
+- follow-up queue operator controls and safety validation
+- dashboard readiness checklist and operator feedback hardening
+
+Operational note:
+
+- Keep seeded data unless explicitly asked to reset.
+
+## Module 3 - Reviews + Referrals
+
+Status: In progress (active module).
+
+Completed checkpoints:
+
+- post-visit review request readiness, queueing, and reporting
+- auto-triggered post-visit requests from completed appointments
+- inbound reply routing (promoter/referral/recovery follow-ups)
+- operator response-draft generation from latest reply context
+- follow-up action visibility in outcomes
+- referral source capture events with dedupe and campaign/run-aware reporting
+
+Remaining checkpoints:
+
+- tighten satisfaction gating for ambiguous mixed-sentiment replies
+- improve referral-source extraction quality and confidence handling
+- expose referral-source captures in dashboard outcomes surfaces
+- add focused regression tests for routing and referral-source capture behavior
+
+Exit criteria:
+
+- satisfied customers are prompted automatically for reviews/referrals
+- negative feedback routes to recovery without false-positive promoter routing
+- operator can see reply context, follow-up actions, and captured referral source metadata
+
+## Module 4 - Paid Ads + Lead Nurturing
+
+Status: Not started.
+
+Planned checkpoints:
+
+- source attribution model and ingestion extensions
+- source-aware nurture sequences
+- ad-to-appointment attribution reporting
+
+## Module 5 - Sales Enablement
+
+Status: Not started.
+
+Planned checkpoints:
+
+- transcript ingestion and storage boundaries
+- scoring/summarization pipeline and coaching prompts
+- performance dashboards and conversion insight reporting

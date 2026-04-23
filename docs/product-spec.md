@@ -66,20 +66,7 @@ Capabilities:
 - referral campaign sequences
 - referral source tracking
 
-### 4. Sales Enablement System
-
-Goal:
-Improve consultation conversion and staff performance.
-
-Capabilities:
-
-- call recording ingestion
-- transcript storage
-- AI scoring and summaries
-- objection and script guidance
-- performance metrics
-
-### 5. Paid Ads + Lead Nurturing Layer
+### 4. Paid Ads + Lead Nurturing Layer
 
 Goal:
 Create more predictable pipeline volume and connect ad spend to outcomes.
@@ -91,6 +78,19 @@ Capabilities:
 - lead nurture sequences
 - ROI and conversion reporting
 - ad-channel performance views
+
+### 5. Sales Enablement System
+
+Goal:
+Improve consultation conversion and staff performance.
+
+Capabilities:
+
+- call recording ingestion
+- transcript storage
+- AI scoring and summaries
+- objection and script guidance
+- performance metrics
 
 ## Shared Platform Requirements
 

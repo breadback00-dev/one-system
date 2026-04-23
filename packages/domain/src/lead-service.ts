@@ -11,6 +11,7 @@ import type {
   MessageInboundReceivedPayload,
   MessageOutboundQueuedPayload,
   MessageSuppressedPayload,
+  ReviewReferralSourceCapturedPayload,
   ReactivationImportCompletedPayload,
   ReactivationFollowUpHandledPayload,
 } from "./events";
@@ -246,6 +247,37 @@ export function createReactivationImportCompletedEvent(args: {
       skippedRowCount: args.skippedRowCount,
       dryRun: args.dryRun,
       importedAt: importedAt.toISOString(),
+    },
+  };
+}
+
+export function createReviewReferralSourceCapturedEvent(args: {
+  workspaceId: string;
+  contactId: string;
+  sourceMessage: string;
+  sourceMessageNormalized: string;
+  referredName?: string;
+  referredContact?: string;
+  campaignKey?: string;
+  runId?: string;
+  capturedAt?: string;
+}): DomainEvent<ReviewReferralSourceCapturedPayload> {
+  const occurredAt = new Date(args.capturedAt ?? new Date().toISOString());
+
+  return {
+    id: randomUUID(),
+    workspaceId: args.workspaceId,
+    name: "reviews_referrals.referral_source_captured",
+    occurredAt,
+    payload: {
+      contactId: args.contactId,
+      capturedAt: occurredAt.toISOString(),
+      sourceMessage: args.sourceMessage,
+      sourceMessageNormalized: args.sourceMessageNormalized,
+      ...(args.referredName ? { referredName: args.referredName } : {}),
+      ...(args.referredContact ? { referredContact: args.referredContact } : {}),
+      ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
+      ...(args.runId ? { runId: args.runId } : {}),
     },
   };
 }

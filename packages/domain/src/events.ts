@@ -5,6 +5,7 @@ export type DomainEventName =
   | "appointment.booked"
   | "reactivation.import_completed"
   | "reactivation.follow_up_handled"
+  | "reviews_referrals.referral_source_captured"
   | "message.inbound_received"
   | "message.outbound_queued"
   | "message.suppressed"
@@ -71,6 +72,17 @@ export interface ReactivationImportCompletedPayload {
   skippedRowCount: number;
   dryRun: boolean;
   importedAt: string;
+}
+
+export interface ReviewReferralSourceCapturedPayload {
+  contactId: string;
+  capturedAt: string;
+  sourceMessage: string;
+  sourceMessageNormalized: string;
+  referredName?: string;
+  referredContact?: string;
+  campaignKey?: string;
+  runId?: string;
 }
 
 export interface MessageOutboundQueuedPayload {

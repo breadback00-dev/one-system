@@ -94,7 +94,11 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 - Module 3 now has `POST /reviews-referrals/response-draft` for reusable response draft generation
 - Module 3 outcomes now include latest reply context and one-click dashboard draft generation from real customer replies
 - Module 3 outcomes now expose promoter/referral/recovery follow-up queued counts for operator visibility
+- Module 3 reply routing now captures referral source details as first-class events with duplicate-message protection
+- Module 3 outcomes now include referral-source capture counts plus captured referral name/contact metadata in dashboard visibility
+- roadmap and product spec module ordering are now aligned (Paid Ads before Sales Enablement)
 - module folders for all five product areas
+- canonical per-module execution plan in `docs/module-plans.md`
 - med spa selected as first implementation niche
 
 ## What We Decided
@@ -130,7 +134,8 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 
 1. Read `AGENTS.md`
 2. Read this file
-3. Run `git status --short`
-4. Review the uncommitted Module 2 files before editing
-5. Run `npm run typecheck`
-6. Continue Module 3 only unless the user explicitly says to switch modules
+3. Read `docs/module-plans.md`
+4. Run `git status --short`
+5. Review uncommitted files for the active module before editing
+6. Run `npm run typecheck`
+7. Continue Module 3 only unless the user explicitly says to switch modules

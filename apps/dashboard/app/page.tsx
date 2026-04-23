@@ -469,6 +469,10 @@ export default async function HomePage({
               <span>Recovery follow-up</span>
               <strong>{reviewsSnapshot.recoveryFollowUpQueuedCount}</strong>
             </div>
+            <div>
+              <span>Referral source captured</span>
+              <strong>{reviewsSnapshot.referralSourceCapturedCount}</strong>
+            </div>
           </div>
           <div className="list-block">
             {reviewsSnapshot.outcomes.length === 0 ? (
@@ -491,6 +495,18 @@ export default async function HomePage({
                         </span>
                         <p>{outcome.latestReplyBody}</p>
                       </blockquote>
+                    ) : null}
+                    {outcome.referralSourceCaptured ? (
+                      <p>
+                        Referral source captured
+                        {outcome.referralSourceCapturedAt
+                          ? ` • ${formatRelativeIso(outcome.referralSourceCapturedAt)}`
+                          : ""}
+                        {outcome.referredName ? ` • ${outcome.referredName}` : ""}
+                        {outcome.referredContact
+                          ? ` • ${outcome.referredContact}`
+                          : ""}
+                      </p>
                     ) : null}
                   </div>
                   <div className="row-meta">

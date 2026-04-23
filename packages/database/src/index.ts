@@ -12,6 +12,7 @@ import type {
   MessageInboundReceivedPayload,
   MessageOutboundQueuedPayload,
   MessageSuppressedPayload,
+  ReviewReferralSourceCapturedPayload,
   ReactivationFollowUpHandledPayload,
   ReactivationImportCompletedPayload,
 } from "@one-system/domain";
@@ -620,6 +621,10 @@ export interface ReviewReferralOutcomeRecord {
   referralFollowUpQueuedAt?: string;
   recoveryFollowUpQueued: boolean;
   recoveryFollowUpQueuedAt?: string;
+  referralSourceCaptured: boolean;
+  referralSourceCapturedAt?: string;
+  referredName?: string;
+  referredContact?: string;
 }
 
 export interface ReviewReferralOutcomeReport {
@@ -634,6 +639,7 @@ export interface ReviewReferralOutcomeReport {
   promoterFollowUpQueuedCount: number;
   referralFollowUpQueuedCount: number;
   recoveryFollowUpQueuedCount: number;
+  referralSourceCapturedCount: number;
   outcomes: ReviewReferralOutcomeRecord[];
 }
 
@@ -1373,6 +1379,32 @@ export async function getRecentQueuedMessagesForReason(args: {
     .filter((event) => event.reason === args.reason);
 }
 
+export async function getRecentEventsForContactByName(args: {
+  workspaceId: string;
+  name: string;
+  contactId: string;
+  since: string;
+  limit?: number;
+}): Promise<DomainEvent[]> {
+  const events = await prisma.event.findMany({
+    where: {
+      workspaceId: args.workspaceId,
+      name: args.name,
+      occurredAt: {
+        gte: new Date(args.since),
+      },
+      payload: {
+        path: ["contactId"],
+        equals: args.contactId,
+      },
+    },
+    orderBy: { occurredAt: "desc" },
+    take: Math.max(1, Math.min(args.limit ?? 50, 200)),
+  });
+
+  return events.map(toDomainEvent);
+}
+
 export async function getReactivationOutcomeReport(args: {
   workspaceId: string;
   campaignKey?: string;
@@ -1596,16 +1628,17 @@ function isReferralIntentSignal(messageBody: string): boolean {
   );
 }
 
-function matchesCampaignRunFilter(args: {
-  payload: MessageOutboundQueuedPayload;
-  campaignKey?: string;
-  runId?: string;
+function matchesCampaignRunMetadata(args: {
+  campaignKey: string | undefined;
+  runId: string | undefined;
+  filterCampaignKey?: string;
+  filterRunId?: string;
 }): boolean {
-  if (args.campaignKey && args.payload.campaignKey !== args.campaignKey) {
+  if (args.filterCampaignKey && args.campaignKey !== args.filterCampaignKey) {
     return false;
   }
 
-  if (args.runId && args.payload.runId !== args.runId) {
+  if (args.filterRunId && args.runId !== args.filterRunId) {
     return false;
   }
 
@@ -1633,15 +1666,12 @@ export async function getReviewReferralOutcomeReport(args: {
       return false;
     }
 
-    if (args.campaignKey && payload.campaignKey !== args.campaignKey) {
-      return false;
-    }
-
-    if (args.runId && payload.runId !== args.runId) {
-      return false;
-    }
-
-    return true;
+    return matchesCampaignRunMetadata({
+      campaignKey: payload.campaignKey,
+      runId: payload.runId,
+      ...(args.campaignKey ? { filterCampaignKey: args.campaignKey } : {}),
+      ...(args.runId ? { filterRunId: args.runId } : {}),
+    });
   });
 
   if (reviewQueuedEvents.length === 0) {
@@ -1657,6 +1687,7 @@ export async function getReviewReferralOutcomeReport(args: {
       promoterFollowUpQueuedCount: 0,
       referralFollowUpQueuedCount: 0,
       recoveryFollowUpQueuedCount: 0,
+      referralSourceCapturedCount: 0,
       outcomes: [],
     };
   }
@@ -1672,7 +1703,13 @@ export async function getReviewReferralOutcomeReport(args: {
       event.occurredAt < earliest ? event.occurredAt : earliest,
     reviewQueuedEvents[0]!.occurredAt,
   );
-  const [contacts, deliveredEvents, inboundMessages, queuedFollowUpEvents] =
+  const [
+    contacts,
+    deliveredEvents,
+    inboundMessages,
+    queuedFollowUpEvents,
+    referralSourceCapturedEvents,
+  ] =
     await Promise.all([
       prisma.contact.findMany({
         where: {
@@ -1711,6 +1748,17 @@ export async function getReviewReferralOutcomeReport(args: {
         orderBy: { occurredAt: "asc" },
         take: 1000,
       }),
+      prisma.event.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          name: "reviews_referrals.referral_source_captured",
+          occurredAt: {
+            gte: earliestQueuedAt,
+          },
+        },
+        orderBy: { occurredAt: "asc" },
+        take: 500,
+      }),
     ]);
   const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
   const deliveredByQueuedEventId = new Map(
@@ -1730,15 +1778,18 @@ export async function getReviewReferralOutcomeReport(args: {
   const promoterFollowUpByContactId = new Map<string, typeof queuedFollowUpEvents>();
   const referralFollowUpByContactId = new Map<string, typeof queuedFollowUpEvents>();
   const recoveryFollowUpByContactId = new Map<string, typeof queuedFollowUpEvents>();
+  const referralSourceCapturedByContactId =
+    new Map<string, typeof referralSourceCapturedEvents>();
 
   for (const event of queuedFollowUpEvents) {
     const payload = event.payload as unknown as MessageOutboundQueuedPayload;
 
     if (
-      !matchesCampaignRunFilter({
-        payload,
-        ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
-        ...(args.runId ? { runId: args.runId } : {}),
+      !matchesCampaignRunMetadata({
+        campaignKey: payload.campaignKey,
+        runId: payload.runId,
+        ...(args.campaignKey ? { filterCampaignKey: args.campaignKey } : {}),
+        ...(args.runId ? { filterRunId: args.runId } : {}),
       })
     ) {
       continue;
@@ -1765,6 +1816,25 @@ export async function getReviewReferralOutcomeReport(args: {
     }
   }
 
+  for (const event of referralSourceCapturedEvents) {
+    const payload = event.payload as unknown as ReviewReferralSourceCapturedPayload;
+
+    if (
+      !matchesCampaignRunMetadata({
+        campaignKey: payload.campaignKey,
+        runId: payload.runId,
+        ...(args.campaignKey ? { filterCampaignKey: args.campaignKey } : {}),
+        ...(args.runId ? { filterRunId: args.runId } : {}),
+      })
+    ) {
+      continue;
+    }
+
+    const entries = referralSourceCapturedByContactId.get(payload.contactId) ?? [];
+    entries.push(event);
+    referralSourceCapturedByContactId.set(payload.contactId, entries);
+  }
+
   const outcomes = reviewQueuedEvents.map((event) => {
     const payload = event.payload as unknown as MessageOutboundQueuedPayload;
     const contact = contactById.get(payload.contactId);
@@ -1788,6 +1858,12 @@ export async function getReviewReferralOutcomeReport(args: {
     const recoveryFollowUpEvent = (
       recoveryFollowUpByContactId.get(payload.contactId) ?? []
     ).find((queuedEvent) => queuedEvent.occurredAt >= event.occurredAt);
+    const referralSourceCapturedEvent = (
+      referralSourceCapturedByContactId.get(payload.contactId) ?? []
+    ).find((capturedEvent) => capturedEvent.occurredAt >= event.occurredAt);
+    const referralSourcePayload = referralSourceCapturedEvent
+      ? (referralSourceCapturedEvent.payload as unknown as ReviewReferralSourceCapturedPayload)
+      : undefined;
 
     return {
       queuedEventId: event.id,
@@ -1825,6 +1901,16 @@ export async function getReviewReferralOutcomeReport(args: {
       ...(recoveryFollowUpEvent
         ? { recoveryFollowUpQueuedAt: recoveryFollowUpEvent.occurredAt.toISOString() }
         : {}),
+      referralSourceCaptured: Boolean(referralSourceCapturedEvent),
+      ...(referralSourceCapturedEvent
+        ? { referralSourceCapturedAt: referralSourceCapturedEvent.occurredAt.toISOString() }
+        : {}),
+      ...(referralSourcePayload?.referredName
+        ? { referredName: referralSourcePayload.referredName }
+        : {}),
+      ...(referralSourcePayload?.referredContact
+        ? { referredContact: referralSourcePayload.referredContact }
+        : {}),
     } satisfies ReviewReferralOutcomeRecord;
   });
 
@@ -1846,6 +1932,9 @@ export async function getReviewReferralOutcomeReport(args: {
     ).length,
     recoveryFollowUpQueuedCount: outcomes.filter(
       (outcome) => outcome.recoveryFollowUpQueued,
+    ).length,
+    referralSourceCapturedCount: outcomes.filter(
+      (outcome) => outcome.referralSourceCaptured,
     ).length,
     outcomes,
   };
