@@ -1,5 +1,6 @@
 import {
   getDashboardFunnelSnapshot,
+  getAvailableBookingSlots,
   getReactivationActionQueue,
   getReactivationOutcomeReport,
   getRecentReactivationRunSummaries,
@@ -12,9 +13,11 @@ import {
 } from "@one-system/database";
 import { SectionCard } from "@one-system/ui";
 import {
-  bookReactivationItemTomorrow,
+  bookReactivationItemAtSlot,
   markReactivationItemHandled,
+  runReactivationCampaign,
 } from "./actions";
+import { previewReactivationRun } from "@one-system/reactivation";
 
 const modules = [
   "Lead Capture + Instant Follow-Up",
@@ -23,6 +26,8 @@ const modules = [
   "Paid Ads + Lead Nurturing",
   "Sales Enablement",
 ];
+
+type PageSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function formatRelativeIso(iso: string) {
   const date = new Date(iso);
@@ -46,10 +51,78 @@ function getReactivationStageLabel(
   return "delivered, no reply yet";
 }
 
-export default async function HomePage() {
+function getAudienceSegmentLabel(segment: string) {
+  if (segment === "stale_leads") {
+    return "Stale leads";
+  }
+
+  if (segment === "past_customers") {
+    return "Past customers";
+  }
+
+  return "All dormant contacts";
+}
+
+function getReadinessLabel(status: string) {
+  if (status === "no_candidates") {
+    return "No matching dormant contacts found for this audience.";
+  }
+
+  if (status === "cooldown_blocked") {
+    return "All matching contacts were skipped by the campaign cooldown.";
+  }
+
+  return "Ready contacts are available for outreach.";
+}
+
+function getSearchParamValue(
+  searchParams: Record<string, string | string[] | undefined>,
+  key: string,
+) {
+  const value = searchParams[key];
+
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getReactivationRunFeedback(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  if (getSearchParamValue(searchParams, "reactivationRun") !== "queued") {
+    return null;
+  }
+
+  return {
+    campaignKey:
+      getSearchParamValue(searchParams, "campaignKey") ?? "reactivation-default",
+    runId: getSearchParamValue(searchParams, "runId") ?? "unknown-run",
+    candidateCount: getSearchParamValue(searchParams, "candidateCount") ?? "0",
+    skippedCount: getSearchParamValue(searchParams, "skippedCount") ?? "0",
+    queuedCount: getSearchParamValue(searchParams, "queuedCount") ?? "0",
+    cooldownDays: getSearchParamValue(searchParams, "cooldownDays") ?? "14",
+    audienceSegment: getSearchParamValue(searchParams, "audienceSegment") ?? "all",
+    readinessStatus: getSearchParamValue(searchParams, "readinessStatus") ?? "ready",
+    staleLeadCount: getSearchParamValue(searchParams, "staleLeadCount") ?? "0",
+    pastCustomerCount: getSearchParamValue(searchParams, "pastCustomerCount") ?? "0",
+    eligibleStaleLeadCount:
+      getSearchParamValue(searchParams, "eligibleStaleLeadCount") ?? "0",
+    eligiblePastCustomerCount:
+      getSearchParamValue(searchParams, "eligiblePastCustomerCount") ?? "0",
+  };
+}
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams?: PageSearchParams;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const reactivationRunFeedback =
+    getReactivationRunFeedback(resolvedSearchParams);
   const [
     deliveryStatus,
     funnelSnapshot,
+    reactivationBookingSlots,
+    defaultReactivationReadiness,
     reactivationSnapshot,
     reactivationRuns,
     reactivationQueue,
@@ -61,6 +134,18 @@ export default async function HomePage() {
   ] = await Promise.all([
     getDeliveryStatus(),
     getDashboardFunnelSnapshot(),
+    getAvailableBookingSlots({
+      workspaceId: "workspace_medspa_demo",
+      limit: 4,
+    }),
+    previewReactivationRun({
+      workspaceId: "workspace_medspa_demo",
+      inactiveDays: 30,
+      limit: 25,
+      cooldownDays: 14,
+      campaignKey: "reactivation-default",
+      audienceSegment: "all",
+    }),
     getReactivationOutcomeReport({
       workspaceId: "workspace_medspa_demo",
       limit: 25,
@@ -228,6 +313,135 @@ export default async function HomePage() {
             )}
           </div>
         </SectionCard>
+
+        <SectionCard title="Run Reactivation Campaign">
+          {reactivationRunFeedback ? (
+            <div className="notice-card">
+              <strong>Campaign run processed</strong>
+              <p>
+                {reactivationRunFeedback.campaignKey} • Run{" "}
+                {reactivationRunFeedback.runId.slice(0, 8)}
+              </p>
+              <p>
+                {getAudienceSegmentLabel(reactivationRunFeedback.audienceSegment)} •{" "}
+                {getReadinessLabel(reactivationRunFeedback.readinessStatus)}
+              </p>
+              <div className="mini-stats">
+                <div>
+                  <span>Candidates</span>
+                  <strong>{reactivationRunFeedback.candidateCount}</strong>
+                </div>
+                <div>
+                  <span>Queued</span>
+                  <strong>{reactivationRunFeedback.queuedCount}</strong>
+                </div>
+                <div>
+                  <span>Skipped</span>
+                  <strong>{reactivationRunFeedback.skippedCount}</strong>
+                </div>
+                <div>
+                  <span>Cooldown</span>
+                  <strong>{reactivationRunFeedback.cooldownDays}d</strong>
+                </div>
+              </div>
+              <div className="mini-stats">
+                <div>
+                  <span>Stale leads</span>
+                  <strong>{reactivationRunFeedback.staleLeadCount}</strong>
+                </div>
+                <div>
+                  <span>Past customers</span>
+                  <strong>{reactivationRunFeedback.pastCustomerCount}</strong>
+                </div>
+                <div>
+                  <span>Eligible leads</span>
+                  <strong>{reactivationRunFeedback.eligibleStaleLeadCount}</strong>
+                </div>
+                <div>
+                  <span>Eligible customers</span>
+                  <strong>{reactivationRunFeedback.eligiblePastCustomerCount}</strong>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <p className="action-warning">
+            Queues outreach for dormant contacts that match this audience. Contacts
+            reached recently for the same campaign key are skipped by the cooldown.
+          </p>
+          <div className="readiness-card">
+            <div>
+              <span className="stat-label">Default readiness</span>
+              <strong>{getReadinessLabel(defaultReactivationReadiness.readinessStatus)}</strong>
+              <p>
+                Previewing all dormant contacts, 30 inactive days, 25-contact limit,
+                and 14-day cooldown before any outreach is queued.
+              </p>
+            </div>
+            <div className="mini-stats">
+              <div>
+                <span>Eligible</span>
+                <strong>{defaultReactivationReadiness.eligibleCount}</strong>
+              </div>
+              <div>
+                <span>Cooldown</span>
+                <strong>{defaultReactivationReadiness.skippedCount}</strong>
+              </div>
+              <div>
+                <span>Stale leads</span>
+                <strong>
+                  {defaultReactivationReadiness.segmentBreakdown.staleLeadCount}
+                </strong>
+              </div>
+              <div>
+                <span>Customers</span>
+                <strong>
+                  {defaultReactivationReadiness.segmentBreakdown.pastCustomerCount}
+                </strong>
+              </div>
+            </div>
+          </div>
+          <form action={runReactivationCampaign} className="control-form">
+            <label>
+              Campaign key
+              <input
+                defaultValue="reactivation-default"
+                name="campaignKey"
+                type="text"
+              />
+            </label>
+            <label>
+              Audience
+              <select defaultValue="all" name="audienceSegment">
+                <option value="all">All dormant contacts</option>
+                <option value="stale_leads">Stale leads only</option>
+                <option value="past_customers">Past customers only</option>
+              </select>
+            </label>
+            <div className="form-grid">
+              <label>
+                Inactive days
+                <input defaultValue="30" min="7" name="inactiveDays" type="number" />
+              </label>
+              <label>
+                Limit
+                <input defaultValue="25" min="1" max="100" name="limit" type="number" />
+              </label>
+              <label>
+                Cooldown days
+                <input
+                  defaultValue="14"
+                  min="1"
+                  max="90"
+                  name="cooldownDays"
+                  type="number"
+                />
+              </label>
+            </div>
+            <button className="text-button" type="submit">
+              Queue campaign
+            </button>
+          </form>
+        </SectionCard>
       </section>
 
       <section className="grid">
@@ -287,6 +501,27 @@ export default async function HomePage() {
                       {item.campaignKey ?? "reactivation-default"} • Run{" "}
                       {(item.runId ?? "legacy-run").slice(0, 8)}
                     </p>
+                    {item.lastInboundBody ? (
+                      <blockquote className="message-context">
+                        <span>
+                          Latest reply
+                          {item.lastInboundAt
+                            ? ` • ${formatRelativeIso(item.lastInboundAt)}`
+                            : ""}
+                        </span>
+                        <p>{item.lastInboundBody}</p>
+                      </blockquote>
+                    ) : item.lastOutboundBody ? (
+                      <blockquote className="message-context">
+                        <span>
+                          Last sent
+                          {item.lastOutboundAt
+                            ? ` • ${formatRelativeIso(item.lastOutboundAt)}`
+                            : ""}
+                        </span>
+                        <p>{item.lastOutboundBody}</p>
+                      </blockquote>
+                    ) : null}
                   </div>
                   <div className="row-meta">
                     <span className={`pill ${item.stage}`}>
@@ -297,18 +532,29 @@ export default async function HomePage() {
                         item.qualifiedAt ?? item.repliedAt ?? item.queuedAt,
                       )}
                     </time>
+                    <p className="action-warning compact-warning">
+                      Booking creates an appointment and clears this item. Mark handled
+                      clears it without booking.
+                    </p>
                     <div className="action-row">
-                      <form action={bookReactivationItemTomorrow}>
-                        <input
-                          name="queuedEventId"
-                          type="hidden"
-                          value={item.queuedEventId}
-                        />
-                        <input name="contactId" type="hidden" value={item.contactId} />
-                        <button className="text-button" type="submit">
-                          Book tomorrow
-                        </button>
-                      </form>
+                      {reactivationBookingSlots.length === 0 ? (
+                        <span className="muted-note">No open slots</span>
+                      ) : (
+                        reactivationBookingSlots.map((slot) => (
+                          <form action={bookReactivationItemAtSlot} key={slot.startsAt}>
+                            <input
+                              name="queuedEventId"
+                              type="hidden"
+                              value={item.queuedEventId}
+                            />
+                            <input name="contactId" type="hidden" value={item.contactId} />
+                            <input name="startsAt" type="hidden" value={slot.startsAt} />
+                            <button className="text-button" type="submit">
+                              {slot.label}
+                            </button>
+                          </form>
+                        ))
+                      )}
                       <form action={markReactivationItemHandled}>
                         <input
                           name="queuedEventId"

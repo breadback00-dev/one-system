@@ -13,15 +13,14 @@ import {
   getDeliveryStatus,
   getMostRecentLeadForContact,
   getPendingWorkflowMessagesForContact,
-  getReactivationCandidates,
   getReactivationOutcomeReport,
-  getRecentQueuedMessagesForReason,
   getRecentEvents,
   markLeadQualified,
   markLeadResponded,
   recordInboundMessage,
   saveAppointmentTransaction,
   saveLeadTransaction,
+  type ReactivationAudienceSegment,
 } from "@one-system/database";
 import {
   createAppointment,
@@ -35,7 +34,10 @@ import {
 } from "@one-system/domain";
 import type { InboundMessage } from "@one-system/messaging";
 import { appConfig } from "@one-system/config";
-import { buildReactivationOutreachEvents } from "@one-system/reactivation";
+import {
+  executeReactivationRun,
+  previewReactivationRun,
+} from "@one-system/reactivation";
 import {
   parseTwilioInboundMessage,
   validateTwilioWebhookRequest,
@@ -69,6 +71,7 @@ interface ReactivationRunBody {
   limit?: number;
   cooldownDays?: number;
   campaignKey?: string;
+  audienceSegment?: ReactivationAudienceSegment;
 }
 
 interface AppointmentRequestBody {
@@ -204,6 +207,16 @@ function validateInboundMessageInput(body: InboundMessageBody) {
   };
 }
 
+function validateReactivationAudienceSegment(
+  value: string | null | undefined,
+): ReactivationAudienceSegment {
+  if (value === "stale_leads" || value === "past_customers") {
+    return value;
+  }
+
+  return "all";
+}
+
 function validateReactivationRunInput(body: ReactivationRunBody) {
   const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
   const inactiveDays = Number.isFinite(body.inactiveDays)
@@ -217,6 +230,9 @@ function validateReactivationRunInput(body: ReactivationRunBody) {
     : 14;
   const campaignKey =
     body.campaignKey?.trim() || "reactivation-default";
+  const audienceSegment = validateReactivationAudienceSegment(
+    body.audienceSegment,
+  );
 
   return {
     workspaceId,
@@ -224,6 +240,40 @@ function validateReactivationRunInput(body: ReactivationRunBody) {
     limit,
     cooldownDays,
     campaignKey,
+    audienceSegment,
+  };
+}
+
+function validateReactivationReadinessQuery(requestUrl: URL) {
+  const inactiveDays = Number.parseInt(
+    requestUrl.searchParams.get("inactiveDays") ?? "30",
+    10,
+  );
+  const limit = Number.parseInt(requestUrl.searchParams.get("limit") ?? "25", 10);
+  const cooldownDays = Number.parseInt(
+    requestUrl.searchParams.get("cooldownDays") ?? "14",
+    10,
+  );
+
+  return {
+    workspaceId:
+      requestUrl.searchParams.get("workspaceId")?.trim() ||
+      "workspace_medspa_demo",
+    inactiveDays: Number.isFinite(inactiveDays)
+      ? Math.max(7, Math.floor(inactiveDays))
+      : 30,
+    limit: Number.isFinite(limit)
+      ? Math.max(1, Math.min(100, Math.floor(limit)))
+      : 25,
+    cooldownDays: Number.isFinite(cooldownDays)
+      ? Math.max(1, Math.min(90, Math.floor(cooldownDays)))
+      : 14,
+    campaignKey:
+      requestUrl.searchParams.get("campaignKey")?.trim() ||
+      "reactivation-default",
+    audienceSegment: validateReactivationAudienceSegment(
+      requestUrl.searchParams.get("audienceSegment"),
+    ),
   };
 }
 
@@ -412,6 +462,16 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/reactivation/readiness"
+    ) {
+      const query = validateReactivationReadinessQuery(requestUrl);
+      const readiness = await previewReactivationRun(query);
+      sendJson(response, 200, readiness);
+      return;
+    }
+
     if (request.method === "POST" && requestUrl.pathname === "/leads") {
       const body = await readJsonBody<LeadRequestBody>(request);
       const input = validateLeadInput(body);
@@ -461,43 +521,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && requestUrl.pathname === "/reactivation/run") {
       const body = await readJsonBody<ReactivationRunBody>(request);
       const input = validateReactivationRunInput(body);
-      const candidates = await getReactivationCandidates(input);
-      const recentTargets = await getRecentQueuedMessagesForReason({
-        workspaceId: input.workspaceId,
-        reason: "reactivation.dormant-outreach",
-        since: new Date(
-          Date.now() - input.cooldownDays * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-      });
-      const recentlyTargetedContactIds = new Set(
-        recentTargets
-          .filter((target) => target.campaignKey === input.campaignKey)
-          .map((target) => target.contactId),
-      );
-      const eligibleCandidates = candidates.filter(
-        (candidate) => !recentlyTargetedContactIds.has(candidate.contactId),
-      );
-      const skippedCandidates = candidates.filter((candidate) =>
-        recentlyTargetedContactIds.has(candidate.contactId),
-      );
-      const queuedEvents = buildReactivationOutreachEvents(eligibleCandidates, {
-        campaignKey: input.campaignKey,
-      });
-
-      if (queuedEvents.length > 0) {
-        await appendEvents(queuedEvents);
-      }
-
-      sendJson(response, 201, {
-        ok: true,
-        candidateCount: candidates.length,
-        skippedCount: skippedCandidates.length,
-        queuedCount: queuedEvents.length,
-        campaignKey: input.campaignKey,
-        cooldownDays: input.cooldownDays,
-        candidates: eligibleCandidates,
-        skippedCandidates,
-      });
+      const result = await executeReactivationRun(input);
+      sendJson(response, 201, result);
       return;
     }
 

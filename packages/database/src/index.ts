@@ -425,6 +425,11 @@ export interface AppointmentOverviewItem {
   createdAt: string;
 }
 
+export interface BookingSlot {
+  label: string;
+  startsAt: string;
+}
+
 export interface DashboardFunnelSnapshot {
   newLeads: number;
   respondedLeads: number;
@@ -451,6 +456,8 @@ export interface ReactivationCandidate {
   destination: string;
   lastActivityAt: string;
 }
+
+export type ReactivationAudienceSegment = "all" | "stale_leads" | "past_customers";
 
 export interface ReactivationSuppressionMatch {
   contactId: string;
@@ -513,6 +520,10 @@ export interface ReactivationActionItem {
   stage: "qualified_waiting_booking" | "replied_waiting_follow_up" | "delivered_no_reply";
   repliedAt?: string;
   qualifiedAt?: string;
+  lastInboundBody?: string;
+  lastInboundAt?: string;
+  lastOutboundBody?: string;
+  lastOutboundAt?: string;
 }
 
 export interface ReactivationHandledRecord {
@@ -571,6 +582,88 @@ export async function getRecentAppointmentOverview(
   }));
 }
 
+export async function getAvailableBookingSlots(args: {
+  workspaceId?: string;
+  daysAhead?: number;
+  limit?: number;
+} = {}): Promise<BookingSlot[]> {
+  const workspaceId = args.workspaceId ?? DEFAULT_WORKSPACE_ID;
+  const daysAhead = Math.max(1, Math.min(args.daysAhead ?? 5, 14));
+  const slotHours = [10, 14];
+  const now = new Date();
+  const windowEnd = new Date(now);
+  windowEnd.setDate(windowEnd.getDate() + daysAhead + 1);
+  windowEnd.setHours(0, 0, 0, 0);
+
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      workspaceId,
+      startsAt: {
+        gte: now,
+        lt: windowEnd,
+      },
+      outcome: {
+        notIn: ["cancelled", "no_show"],
+      },
+    },
+    select: {
+      startsAt: true,
+    },
+  });
+  const occupiedStarts = new Set(
+    appointments.map((appointment) => appointment.startsAt.toISOString()),
+  );
+  const slots: BookingSlot[] = [];
+
+  for (let dayOffset = 1; dayOffset <= daysAhead; dayOffset += 1) {
+    for (const hour of slotHours) {
+      const startsAt = new Date(now);
+      startsAt.setDate(startsAt.getDate() + dayOffset);
+      startsAt.setHours(hour, 0, 0, 0);
+
+      if (startsAt <= now || occupiedStarts.has(startsAt.toISOString())) {
+        continue;
+      }
+
+      const label = startsAt.toLocaleString("en-GB", {
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      slots.push({
+        label,
+        startsAt: startsAt.toISOString(),
+      });
+    }
+  }
+
+  return slots.slice(0, args.limit ?? 4);
+}
+
+export async function isAppointmentSlotAvailable(args: {
+  workspaceId?: string;
+  startsAt: string;
+}): Promise<boolean> {
+  const startsAt = new Date(args.startsAt);
+
+  if (Number.isNaN(startsAt.getTime()) || startsAt <= new Date()) {
+    return false;
+  }
+
+  const existingAppointment = await prisma.appointment.findFirst({
+    where: {
+      workspaceId: args.workspaceId ?? DEFAULT_WORKSPACE_ID,
+      startsAt,
+      outcome: {
+        notIn: ["cancelled", "no_show"],
+      },
+    },
+  });
+
+  return !existingAppointment;
+}
+
 export async function getDashboardFunnelSnapshot(
   workspaceId = DEFAULT_WORKSPACE_ID,
 ): Promise<DashboardFunnelSnapshot> {
@@ -613,58 +706,67 @@ export async function getReactivationCandidates(args: {
   workspaceId: string;
   inactiveDays: number;
   limit?: number;
+  audienceSegment?: ReactivationAudienceSegment;
 }): Promise<ReactivationCandidate[]> {
   const cutoff = new Date(Date.now() - args.inactiveDays * 24 * 60 * 60 * 1000);
+  const audienceSegment = args.audienceSegment ?? "all";
+  const includeStaleLeads =
+    audienceSegment === "all" || audienceSegment === "stale_leads";
+  const includePastCustomers =
+    audienceSegment === "all" || audienceSegment === "past_customers";
+  const contactQuery = {
+    orderBy: { createdAt: "asc" },
+    take: args.limit ?? 25,
+    include: {
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+  } satisfies Pick<
+    Prisma.ContactFindManyArgs,
+    "orderBy" | "take" | "include"
+  >;
   const [staleLeadContacts, pastCustomerContacts] = await Promise.all([
-    prisma.contact.findMany({
-      where: {
-        workspaceId: args.workspaceId,
-        leads: {
-          some: {
-            createdAt: { lte: cutoff },
+    includeStaleLeads
+      ? prisma.contact.findMany({
+          ...contactQuery,
+          where: {
+            workspaceId: args.workspaceId,
+            leads: {
+              some: {
+                createdAt: { lte: cutoff },
+              },
+            },
+            appointments: {
+              none: {},
+            },
+            messages: {
+              none: {
+                createdAt: { gte: cutoff },
+              },
+            },
+            OR: [{ phone: { not: null } }, { email: { not: null } }],
           },
-        },
-        appointments: {
-          none: {},
-        },
-        messages: {
-          none: {
-            createdAt: { gte: cutoff },
+        })
+      : [],
+    includePastCustomers
+      ? prisma.contact.findMany({
+          ...contactQuery,
+          where: {
+            workspaceId: args.workspaceId,
+            appointments: {
+              some: {},
+            },
+            messages: {
+              none: {
+                createdAt: { gte: cutoff },
+              },
+            },
+            OR: [{ phone: { not: null } }, { email: { not: null } }],
           },
-        },
-        OR: [{ phone: { not: null } }, { email: { not: null } }],
-      },
-      orderBy: { createdAt: "asc" },
-      take: args.limit ?? 25,
-      include: {
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
-      },
-    }),
-    prisma.contact.findMany({
-      where: {
-        workspaceId: args.workspaceId,
-        appointments: {
-          some: {},
-        },
-        messages: {
-          none: {
-            createdAt: { gte: cutoff },
-          },
-        },
-        OR: [{ phone: { not: null } }, { email: { not: null } }],
-      },
-      orderBy: { createdAt: "asc" },
-      take: args.limit ?? 25,
-      include: {
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
-      },
-    }),
+        })
+      : [],
   ]);
 
   const toCandidate = (
@@ -1127,33 +1229,65 @@ export async function getReactivationActionQueue(args: {
       .map((payload) => payload.queuedEventId),
   );
 
-  return report.outcomes
+  const openOutcomes = report.outcomes
     .filter(
       (outcome) =>
         !outcome.booked && !handledQueuedEventIds.has(outcome.queuedEventId),
-    )
-    .map((outcome) => {
-      const stage = outcome.qualified
-        ? "qualified_waiting_booking"
-        : outcome.replied
-          ? "replied_waiting_follow_up"
-          : "delivered_no_reply";
+    );
+  const contactIds = [...new Set(openOutcomes.map((outcome) => outcome.contactId))];
+  const recentMessages = contactIds.length > 0
+    ? await prisma.message.findMany({
+        where: {
+          workspaceId: args.workspaceId,
+          contactId: { in: contactIds },
+        },
+        orderBy: { createdAt: "desc" },
+        take: Math.max(50, contactIds.length * 6),
+      })
+    : [];
+  const messagesByContactId = new Map<string, typeof recentMessages>();
+  for (const message of recentMessages) {
+    const messages = messagesByContactId.get(message.contactId) ?? [];
+    messages.push(message);
+    messagesByContactId.set(message.contactId, messages);
+  }
 
-      return {
-        queuedEventId: outcome.queuedEventId,
-        contactId: outcome.contactId,
-        firstName: outcome.firstName,
-        destination: outcome.destination,
-        channel: outcome.channel,
-        ...(outcome.campaignKey ? { campaignKey: outcome.campaignKey } : {}),
-        ...(outcome.runId ? { runId: outcome.runId } : {}),
-        queuedAt: outcome.queuedAt,
-        stage,
-        ...(outcome.repliedAt ? { repliedAt: outcome.repliedAt } : {}),
-        ...(outcome.qualifiedAt ? { qualifiedAt: outcome.qualifiedAt } : {}),
-      } satisfies ReactivationActionItem;
-    })
-    .sort((left, right) => {
+  return openOutcomes.map((outcome) => {
+    const stage = outcome.qualified
+      ? "qualified_waiting_booking"
+      : outcome.replied
+        ? "replied_waiting_follow_up"
+        : "delivered_no_reply";
+    const messages = messagesByContactId.get(outcome.contactId) ?? [];
+    const lastInbound = messages.find((message) => message.direction === "inbound");
+    const lastOutbound = messages.find((message) => message.direction === "outbound");
+
+    return {
+      queuedEventId: outcome.queuedEventId,
+      contactId: outcome.contactId,
+      firstName: outcome.firstName,
+      destination: outcome.destination,
+      channel: outcome.channel,
+      ...(outcome.campaignKey ? { campaignKey: outcome.campaignKey } : {}),
+      ...(outcome.runId ? { runId: outcome.runId } : {}),
+      queuedAt: outcome.queuedAt,
+      stage,
+      ...(outcome.repliedAt ? { repliedAt: outcome.repliedAt } : {}),
+      ...(outcome.qualifiedAt ? { qualifiedAt: outcome.qualifiedAt } : {}),
+      ...(lastInbound
+        ? {
+            lastInboundBody: lastInbound.body,
+            lastInboundAt: lastInbound.createdAt.toISOString(),
+          }
+        : {}),
+      ...(lastOutbound
+        ? {
+            lastOutboundBody: lastOutbound.body,
+            lastOutboundAt: lastOutbound.createdAt.toISOString(),
+          }
+        : {}),
+    } satisfies ReactivationActionItem;
+  }).sort((left, right) => {
       const priority = {
         qualified_waiting_booking: 0,
         replied_waiting_follow_up: 1,

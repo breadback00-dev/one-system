@@ -7,7 +7,8 @@ Backend entrypoint for APIs, webhooks, background jobs, workflow orchestration, 
 - `POST /leads` creates a lead and emits follow-up workflow events.
 - `POST /appointments` creates an appointment, persists it, and emits an `appointment.booked` event.
 - `POST /messages/inbound` accepts normalized JSON inbound messages for local testing.
-- `POST /reactivation/run` finds dormant contacts with no recent activity, segments them into stale leads and past customers, applies a cooldown window by `campaignKey`, and queues a reactivation outreach batch.
+- `GET /reactivation/readiness` previews dormant audience readiness without queueing outreach, including audience segment counts and cooldown-blocked contacts.
+- `POST /reactivation/run` finds dormant contacts with no recent activity, optionally narrows to stale leads or past customers, applies a cooldown window by `campaignKey`, and queues a reactivation outreach batch.
 - `GET /reactivation/report` summarizes queued reactivation outreach by `campaignKey` and/or `runId`, including delivery, reply, qualification, and booking-follow-through signals.
 - `POST /webhooks/twilio/messages?workspaceId=...` accepts Twilio SMS webhook payloads, validates the Twilio signature when `TWILIO_AUTH_TOKEN` is configured, and records them as threaded inbound messages.
 

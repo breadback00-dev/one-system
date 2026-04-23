@@ -1,3 +1,10 @@
 # Reactivation Module
 
 Dormant lead and customer reactivation campaigns with messaging and booking conversion.
+
+## Current Capabilities
+
+- Builds dormant outreach events for stale leads and past customers.
+- Executes shared reactivation runs for API and dashboard callers.
+- Applies campaign-key cooldowns before queueing outreach.
+- Previews readiness without side effects so operators can see candidate, eligible, skipped, and segment counts before sending.

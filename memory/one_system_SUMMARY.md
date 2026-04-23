@@ -4,6 +4,12 @@
 
 M1 - Platform Foundation
 
+## Active Module
+
+Module 2 - Database Reactivation
+
+Stay on Module 2 until explicitly told to switch modules. Say clearly before starting any new module.
+
 ## What Exists
 
 - initial product spec source file in project root
@@ -50,6 +56,17 @@ M1 - Platform Foundation
 - Module 2 queue items can now be marked handled from the dashboard through a `reactivation.follow_up_handled` event
 - Module 2 queue items can now be booked for a next-day default appointment from the dashboard, creating an `appointment.booked` event and clearing the queue item
 - the dashboard now shows recently handled Module 2 reactivation queue items with campaign/run context and handling notes
+- Module 2 reactivation queue items now show recent inbound/outbound conversation context before operator actions
+- Module 2 reactivation queue booking actions now offer multiple explicit next appointment slots instead of one fixed shortcut
+- Module 2 reactivation campaign execution now lives in the reactivation module package and is reused by both API and dashboard entry points
+- the dashboard now includes a Module 2 campaign control form for queueing reactivation outreach with campaign key, inactivity window, limit, and cooldown settings
+- after a Module 2 campaign run is queued from the dashboard, the operator sees candidate, queued, skipped, cooldown, campaign key, and run id feedback
+- Module 2 dashboard actions now include consequence copy for campaign queueing, booking slots, and mark-handled actions
+- Module 2 queue booking slots are now generated from appointment availability and server-side booking rejects stale/unavailable slots
+- Module 2 reactivation run inputs now support explicit audience selection for all dormant contacts, stale leads only, or past customers only
+- Module 2 campaign run results now include readiness status and segment breakdowns so operators can distinguish queued campaigns from no-audience or cooldown-blocked runs
+- Module 2 now has a side-effect-free reactivation readiness preview reused by the dashboard and exposed at `GET /reactivation/readiness`
+- the dashboard campaign controls now show default readiness before queueing outreach
 - module folders for all five product areas
 - med spa selected as first implementation niche
 
@@ -63,23 +80,23 @@ M1 - Platform Foundation
 
 ## What Comes Next
 
-- scaffold the actual app and package codebases
-- define entities and schemas in code
-- choose the implementation stack details and tooling
-- lock build-vs-borrow choices for auth, workflows, messaging, and booking
-- build the first end-to-end lead intake and follow-up workflow
+- continue Module 2 only
+- keep tightening Reactivation campaign controls and operator safety
+- add final readiness checks before declaring Module 2 usable enough
+- keep commits to meaningful module/capability checkpoints, not every small slice
 
 ## Immediate Next Step
 
-- replace the dev delivery adapter with Twilio when we are ready to wire a real provider
-- generalize the minimal sequence capability into reusable step definitions and scheduling rules
-- expose response state and workflow outcomes more explicitly in the dashboard
-- deepen Reactivation with reply/booking tracking, richer segmentation rules, and clearer run reporting
-- deepen Module 2 operator actions with conversation context and real scheduling availability
+- review the current uncommitted Module 2 checkpoint
+- consider a meaningful Module 2 commit after one more review/build pass
+- continue Module 2 with final readiness/operator checks, not Module 3
+- if committing, batch the current Module 2 work into a meaningful checkpoint
 
 ## How To Resume
 
-1. Read `docs/product-spec.md`, `docs/architecture.md`, and `docs/roadmap.md`
-2. Confirm or refine the technical stack
-3. Scaffold the monorepo toolchain
-4. Start implementing the foundation model and lead workflow
+1. Read `AGENTS.md`
+2. Read this file
+3. Run `git status --short`
+4. Review the uncommitted Module 2 files before editing
+5. Run `npm run typecheck`
+6. Continue Module 2 only unless the user explicitly says to switch modules
