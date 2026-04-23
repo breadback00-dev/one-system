@@ -1,6 +1,7 @@
 import { PrismaClient, type Prisma } from "@prisma/client";
 import { appConfig } from "@one-system/config";
 import {
+  classifyReviewReferralReplySignals,
   createReactivationFollowUpHandledEvent,
   createReactivationImportCompletedEvent,
 } from "@one-system/domain";
@@ -1605,29 +1606,6 @@ export async function getReactivationOutcomeReport(args: {
   };
 }
 
-function isPromoterSignal(messageBody: string): boolean {
-  const normalized = messageBody.toLowerCase();
-
-  return (
-    /\b5\b/.test(normalized) ||
-    normalized.includes("great") ||
-    normalized.includes("amazing") ||
-    normalized.includes("awesome") ||
-    normalized.includes("love")
-  );
-}
-
-function isReferralIntentSignal(messageBody: string): boolean {
-  const normalized = messageBody.toLowerCase();
-
-  return (
-    normalized.includes("refer") ||
-    normalized.includes("referral") ||
-    normalized.includes("friend") ||
-    normalized.includes("family")
-  );
-}
-
 function matchesCampaignRunMetadata(args: {
   campaignKey: string | undefined;
   runId: string | undefined;
@@ -1843,12 +1821,17 @@ export async function getReviewReferralOutcomeReport(args: {
     const replies = (inboundByContactId.get(payload.contactId) ?? []).filter(
       (message) => message.createdAt >= event.occurredAt,
     );
+    const classifiedReplies = replies.map((reply) => ({
+      reply,
+      signals: classifyReviewReferralReplySignals(reply.body),
+    }));
     const firstReply = replies[0];
     const latestReply = replies.length > 0 ? replies[replies.length - 1] : undefined;
-    const promoterReply = replies.find((reply) => isPromoterSignal(reply.body));
-    const referralReply = replies.find((reply) =>
-      isReferralIntentSignal(reply.body),
-    );
+    const promoterReply = classifiedReplies.find((entry) => entry.signals.promoter)
+      ?.reply;
+    const referralReply = classifiedReplies.find(
+      (entry) => entry.signals.referralIntent,
+    )?.reply;
     const promoterFollowUpEvent = (
       promoterFollowUpByContactId.get(payload.contactId) ?? []
     ).find((queuedEvent) => queuedEvent.occurredAt >= event.occurredAt);

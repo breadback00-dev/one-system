@@ -96,6 +96,8 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 - Module 3 outcomes now expose promoter/referral/recovery follow-up queued counts for operator visibility
 - Module 3 reply routing now captures referral source details as first-class events with duplicate-message protection
 - Module 3 outcomes now include referral-source capture counts plus captured referral name/contact metadata in dashboard visibility
+- Module 3 now uses a shared feedback-signal classifier so mixed sentiment routes to recovery and suppresses false promoter/referral positives
+- Module 3 sentiment-signal regression tests now run in `@one-system/domain` during workspace `npm run test`
 - roadmap and product spec module ordering are now aligned (Paid Ads before Sales Enablement)
 - module folders for all five product areas
 - canonical per-module execution plan in `docs/module-plans.md`

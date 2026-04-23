@@ -7,6 +7,7 @@ import {
   type ReviewResponseConfidence,
 } from "@one-system/ai";
 import {
+  classifyReviewReferralReplySignals,
   createQueuedOutboundMessageEvent,
   createReviewReferralSourceCapturedEvent,
   type ReviewReferralSourceCapturedPayload,
@@ -207,43 +208,6 @@ function getDeliverAfterIso(args: {
   return (delayedFromVisit > minimumBuffer
     ? delayedFromVisit
     : minimumBuffer).toISOString();
-}
-
-function isPromoterFeedback(messageBody: string): boolean {
-  const normalized = messageBody.toLowerCase();
-
-  return (
-    /\b5\b/.test(normalized) ||
-    normalized.includes("great") ||
-    normalized.includes("amazing") ||
-    normalized.includes("awesome") ||
-    normalized.includes("love")
-  );
-}
-
-function isRecoveryFeedback(messageBody: string): boolean {
-  const normalized = messageBody.toLowerCase();
-
-  return (
-    /\b1\b/.test(normalized) ||
-    /\b2\b/.test(normalized) ||
-    /\b3\b/.test(normalized) ||
-    normalized.includes("bad") ||
-    normalized.includes("poor") ||
-    normalized.includes("unhappy") ||
-    normalized.includes("disappointed")
-  );
-}
-
-function isReferralIntentFeedback(messageBody: string): boolean {
-  const normalized = messageBody.toLowerCase();
-
-  return (
-    normalized.includes("refer") ||
-    normalized.includes("referral") ||
-    normalized.includes("friend") ||
-    normalized.includes("family")
-  );
 }
 
 function normalizeFreeText(value: string): string {
@@ -537,9 +501,10 @@ export async function routeReviewsReferralsReply(
   const normalizedMessage = normalizeFreeText(input.messageBody);
   const referredName = extractReferralName(input.messageBody);
   const referredContact = extractReferralContact(input.messageBody);
-  const promoterFeedback = isPromoterFeedback(input.messageBody);
-  const recoveryFeedback = isRecoveryFeedback(input.messageBody);
-  const referralIntentFeedback = isReferralIntentFeedback(input.messageBody);
+  const feedbackSignals = classifyReviewReferralReplySignals(input.messageBody);
+  const promoterFeedback = feedbackSignals.promoter;
+  const recoveryFeedback = feedbackSignals.recovery;
+  const referralIntentFeedback = feedbackSignals.referralIntent;
   const recentReferralFollowUps = await getRecentQueuedMessagesForReason({
     workspaceId: input.workspaceId,
     reason: REFERRAL_FOLLOW_UP_REASON,
