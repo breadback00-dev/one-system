@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  assertReactivationFollowUpActionable,
   isAppointmentSlotAvailable,
   markReactivationFollowUpHandled,
   saveAppointmentTransaction,
@@ -34,6 +35,12 @@ export async function markReactivationItemHandled(formData: FormData) {
     throw new Error("Reactivation queue item is missing required identifiers.");
   }
 
+  await assertReactivationFollowUpActionable({
+    workspaceId: "workspace_medspa_demo",
+    queuedEventId,
+    contactId,
+  });
+
   await markReactivationFollowUpHandled({
     workspaceId: "workspace_medspa_demo",
     queuedEventId,
@@ -58,6 +65,12 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
   if (Number.isNaN(startsAt.getTime())) {
     throw new Error("Selected appointment slot is invalid.");
   }
+
+  await assertReactivationFollowUpActionable({
+    workspaceId: "workspace_medspa_demo",
+    queuedEventId,
+    contactId,
+  });
 
   const isAvailable = await isAppointmentSlotAvailable({
     workspaceId: "workspace_medspa_demo",

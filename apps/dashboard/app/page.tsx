@@ -116,6 +116,7 @@ function getModule2ReadinessChecks(args: {
   eligibleCount: number;
   runCount: number;
   bookingSlotCount: number;
+  qualifiedQueueCount: number;
   queuedCount: number;
   repliedCount: number;
   bookedCount: number;
@@ -147,11 +148,13 @@ function getModule2ReadinessChecks(args: {
     },
     {
       label: "Booking path available",
-      ready: args.bookingSlotCount > 0,
+      ready: args.qualifiedQueueCount === 0 || args.bookingSlotCount > 0,
       detail:
-        args.bookingSlotCount > 0
-          ? `${args.bookingSlotCount} generated booking slots available`
-          : "No booking slots are currently available",
+        args.qualifiedQueueCount === 0
+          ? "No qualified contacts are currently waiting for booking"
+          : args.bookingSlotCount > 0
+            ? `${args.bookingSlotCount} generated booking slots available for ${args.qualifiedQueueCount} qualified queue items`
+            : `${args.qualifiedQueueCount} qualified queue items are waiting but no booking slots are currently available`,
     },
     {
       label: "Outcomes measurable",
@@ -208,7 +211,7 @@ export default async function HomePage({
     }),
     getReactivationActionQueue({
       workspaceId: "workspace_medspa_demo",
-      limit: 8,
+      limit: 25,
     }),
     getRecentReactivationImports({
       workspaceId: "workspace_medspa_demo",
@@ -228,6 +231,9 @@ export default async function HomePage({
     eligibleCount: defaultReactivationReadiness.eligibleCount,
     runCount: reactivationRuns.length,
     bookingSlotCount: reactivationBookingSlots.length,
+    qualifiedQueueCount: reactivationQueue.filter(
+      (item) => item.stage === "qualified_waiting_booking",
+    ).length,
     queuedCount: reactivationSnapshot.queuedCount,
     repliedCount: reactivationSnapshot.repliedCount,
     bookedCount: reactivationSnapshot.bookedCount,
@@ -587,7 +593,7 @@ export default async function HomePage({
             {reactivationQueue.length === 0 ? (
               <p>No open reactivation follow-up items right now.</p>
             ) : (
-              reactivationQueue.map((item) => (
+              reactivationQueue.slice(0, 8).map((item) => (
                 <div className="list-row" key={item.queuedEventId}>
                   <div>
                     <strong>{item.firstName}</strong>

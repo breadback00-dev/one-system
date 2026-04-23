@@ -540,6 +540,11 @@ export interface ReactivationHandledRecord {
   note?: string;
 }
 
+export interface ReactivationActionabilityCheck {
+  queuedAt: string;
+  stage: ReactivationActionItem["stage"];
+}
+
 export interface ReactivationImportRow {
   firstName: string;
   lastName?: string;
@@ -1565,6 +1570,116 @@ export async function getReactivationActionQueue(args: {
       return new Date(right.queuedAt).getTime() - new Date(left.queuedAt).getTime();
     })
     .slice(0, args.limit ?? 8);
+}
+
+export async function assertReactivationFollowUpActionable(args: {
+  workspaceId: string;
+  queuedEventId: string;
+  contactId: string;
+}): Promise<ReactivationActionabilityCheck> {
+  const queuedEvent = await prisma.event.findFirst({
+    where: {
+      workspaceId: args.workspaceId,
+      id: args.queuedEventId,
+      name: "message.outbound_queued",
+    },
+  });
+
+  if (!queuedEvent) {
+    throw new Error("Reactivation queue item no longer exists.");
+  }
+
+  const queuedPayload = queuedEvent.payload as unknown as MessageOutboundQueuedPayload;
+  if (queuedPayload.reason !== "reactivation.dormant-outreach") {
+    throw new Error("Queue item is not a Module 2 reactivation outreach event.");
+  }
+
+  if (queuedPayload.contactId !== args.contactId) {
+    throw new Error("Reactivation queue item contact does not match this action.");
+  }
+
+  const [handledEvent, bookedEvent, fallbackAppointment, inboundReply, qualifiedEvent] =
+    await Promise.all([
+      prisma.event.findFirst({
+        where: {
+          workspaceId: args.workspaceId,
+          name: "reactivation.follow_up_handled",
+          payload: {
+            path: ["queuedEventId"],
+            equals: args.queuedEventId,
+          },
+        },
+      }),
+      prisma.event.findFirst({
+        where: {
+          workspaceId: args.workspaceId,
+          name: "appointment.booked",
+          occurredAt: {
+            gte: queuedEvent.occurredAt,
+          },
+          payload: {
+            path: ["contactId"],
+            equals: args.contactId,
+          },
+        },
+      }),
+      prisma.appointment.findFirst({
+        where: {
+          workspaceId: args.workspaceId,
+          contactId: args.contactId,
+          createdAt: {
+            gte: queuedEvent.occurredAt,
+          },
+          outcome: {
+            notIn: ["cancelled", "no_show"],
+          },
+        },
+      }),
+      prisma.message.findFirst({
+        where: {
+          workspaceId: args.workspaceId,
+          contactId: args.contactId,
+          direction: "inbound",
+          createdAt: {
+            gte: queuedEvent.occurredAt,
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.event.findFirst({
+        where: {
+          workspaceId: args.workspaceId,
+          name: "lead.qualified",
+          occurredAt: {
+            gte: queuedEvent.occurredAt,
+          },
+          payload: {
+            path: ["contactId"],
+            equals: args.contactId,
+          },
+        },
+        orderBy: { occurredAt: "asc" },
+      }),
+    ]);
+
+  if (handledEvent) {
+    throw new Error("Reactivation queue item is already handled.");
+  }
+
+  if (bookedEvent || fallbackAppointment) {
+    throw new Error("Reactivation queue item is already booked.");
+  }
+
+  const stage = qualifiedEvent
+    ? "qualified_waiting_booking"
+    : inboundReply
+      ? "replied_waiting_follow_up"
+      : "delivered_no_reply";
+
+  return {
+    queuedAt: queuedEvent.occurredAt.toISOString(),
+    stage,
+  };
 }
 
 export async function markReactivationFollowUpHandled(args: {
