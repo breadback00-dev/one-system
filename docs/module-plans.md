@@ -95,7 +95,8 @@ Seeded proof evidence (2026-04-23):
 
 - queued one paid nurture run (`queuedCount +1`, `queuedEventCount +2`) with readiness `ready`
 - processed one inbound reply and one qualification outcome (`replied +1`, `qualified +1`)
-- recorded one spend entry (`USD 125`) and produced one attribution ROI row (`facebook_ads` + `proof_campaign`)
+- recorded one spend entry (`USD 125`) and produced one attribution ROI row (`facebook_ads` + unique proof UTM campaign)
+- proof script now prints an explicit schema-sync hint when Module 4 columns are missing and uses unique campaign tagging to keep repeated proof runs deterministic
 
 ## Module 5 - Sales Enablement
 
