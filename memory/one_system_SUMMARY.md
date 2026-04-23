@@ -90,6 +90,8 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 - Module 3 reporting now tracks queued, delivered, replied, promoter-signal, and referral-intent outcomes
 - appointments created with `outcome: completed` now auto-trigger a delayed post-visit Module 3 review request with cooldown protection
 - inbound post-visit replies now route into promoter follow-up or recovery follow-up outreach with cooldown-safe queueing
+- Module 3 now includes operator-facing review-response draft generation with sentiment classification, confidence, and suggested next action
+- Module 3 now has `POST /reviews-referrals/response-draft` for reusable response draft generation
 - module folders for all five product areas
 - med spa selected as first implementation niche
 
@@ -113,7 +115,7 @@ Stay on Module 3 until explicitly told to switch modules. Say clearly before sta
 
 - continue Module 3 implementation slices
 - add stronger satisfaction gating and referral routing paths on inbound feedback
-- design first response-suggestion flow for operator-assisted review handling
+- refine response-suggestion flow for operator-assisted review handling and link drafts to richer conversation context
 - keep commits to meaningful module/capability checkpoints, not every small slice
 
 ## Immediate Next Step

@@ -13,7 +13,10 @@ import {
 } from "@one-system/database";
 import { createAppointment } from "@one-system/domain";
 import { executeReactivationRun } from "@one-system/reactivation";
-import { executeReviewsReferralsRun } from "@one-system/reviews-referrals";
+import {
+  createReviewResponseDraft,
+  executeReviewsReferralsRun,
+} from "@one-system/reviews-referrals";
 
 const DASHBOARD_PATH = "/";
 
@@ -306,6 +309,42 @@ export async function runReviewsReferralsCampaign(formData: FormData) {
     cooldownDays: String(result.cooldownDays),
     completedDaysAgo: String(result.completedDaysAgo),
     readinessStatus: result.readinessStatus,
+  });
+  redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+}
+
+export async function generateReviewsResponseDraft(formData: FormData) {
+  const customerMessage = String(formData.get("customerMessage") ?? "").trim();
+  const customerFirstName = String(formData.get("customerFirstName") ?? "").trim();
+
+  let result: Awaited<ReturnType<typeof createReviewResponseDraft>>;
+
+  try {
+    result = createReviewResponseDraft({
+      workspaceId: "workspace_medspa_demo",
+      customerMessage,
+      ...(customerFirstName ? { customerFirstName } : {}),
+    });
+  } catch (error) {
+    revalidatePath(DASHBOARD_PATH);
+    const params = new URLSearchParams({
+      reviewsDraft: "error",
+      reviewsDraftMessage: formatFeedbackMessage(
+        error,
+        "Unable to generate a reviews/referrals response draft.",
+      ),
+    });
+    redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+  }
+
+  revalidatePath(DASHBOARD_PATH);
+  const params = new URLSearchParams({
+    reviewsDraft: "ready",
+    reviewsDraftSentiment: result.sentiment,
+    reviewsDraftConfidence: result.confidence,
+    reviewsDraftAction: result.suggestedNextAction,
+    reviewsDraftPromptKey: result.promptKey,
+    reviewsDraftText: result.draft.slice(0, 600),
   });
   redirect(`${DASHBOARD_PATH}?${params.toString()}`);
 }

@@ -6,6 +6,8 @@ import {
   getReactivationRunFeedback,
 } from "./reactivation-feedback";
 import {
+  getReviewsDraftErrorMessage,
+  getReviewsDraftFeedback,
   getReviewsRunErrorMessage,
   getReviewsRunFeedback,
 } from "./reviews-referrals-feedback";
@@ -99,6 +101,38 @@ function testReviewsRunErrorFallback() {
   assert.equal(error, "Unable to queue the reviews/referrals campaign.");
 }
 
+function testReviewsDraftFeedbackReady() {
+  const feedback = getReviewsDraftFeedback({
+    reviewsDraft: "ready",
+    reviewsDraftSentiment: "promoter",
+    reviewsDraftConfidence: "high",
+    reviewsDraftAction: "invite_public_review",
+    reviewsDraftText: "Thanks for the kind words.",
+  });
+
+  assert.ok(feedback, "Expected reviews draft feedback to be present.");
+  assert.equal(feedback.sentiment, "promoter");
+  assert.equal(feedback.confidence, "high");
+  assert.equal(feedback.suggestedAction, "invite_public_review");
+  assert.equal(feedback.draft, "Thanks for the kind words.");
+}
+
+function testReviewsDraftFeedbackNotReady() {
+  const feedback = getReviewsDraftFeedback({
+    reviewsDraft: "error",
+  });
+
+  assert.equal(feedback, null);
+}
+
+function testReviewsDraftErrorFallback() {
+  const error = getReviewsDraftErrorMessage({
+    reviewsDraft: "error",
+  });
+
+  assert.equal(error, "Unable to generate a reviews/referrals response draft.");
+}
+
 function run() {
   testReactivationRunFeedbackQueued();
   testReactivationRunFeedbackNotQueued();
@@ -108,6 +142,9 @@ function run() {
   testReviewsRunFeedbackQueued();
   testReviewsRunFeedbackNotQueued();
   testReviewsRunErrorFallback();
+  testReviewsDraftFeedbackReady();
+  testReviewsDraftFeedbackNotReady();
+  testReviewsDraftErrorFallback();
   console.log("[dashboard] feedback parser tests passed");
 }
 

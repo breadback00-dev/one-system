@@ -43,6 +43,7 @@ import {
   previewReactivationRun,
 } from "@one-system/reactivation";
 import {
+  createReviewResponseDraft,
   executeReviewsReferralsRun,
   previewReviewsReferralsRun,
   routeReviewsReferralsReply,
@@ -90,6 +91,12 @@ interface ReviewsReferralsRunBody {
   limit?: number;
   cooldownDays?: number;
   campaignKey?: string;
+}
+
+interface ReviewsReferralsResponseDraftBody {
+  workspaceId?: string;
+  customerMessage?: string;
+  customerFirstName?: string;
 }
 
 interface AppointmentRequestBody {
@@ -302,6 +309,25 @@ function validateReviewsReferralsRunInput(body: ReviewsReferralsRunBody) {
     limit,
     cooldownDays,
     campaignKey,
+  };
+}
+
+function validateReviewsReferralsResponseDraftInput(
+  body: ReviewsReferralsResponseDraftBody,
+) {
+  const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
+  const customerMessage = body.customerMessage?.trim();
+
+  if (!customerMessage) {
+    throw new Error("`customerMessage` is required.");
+  }
+
+  return {
+    workspaceId,
+    customerMessage,
+    ...(body.customerFirstName?.trim()
+      ? { customerFirstName: body.customerFirstName.trim() }
+      : {}),
   };
 }
 
@@ -853,6 +879,17 @@ const server = createServer(async (request, response) => {
       const input = validateReviewsReferralsRunInput(body);
       const result = await executeReviewsReferralsRun(input);
       sendJson(response, 201, result);
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      requestUrl.pathname === "/reviews-referrals/response-draft"
+    ) {
+      const body = await readJsonBody<ReviewsReferralsResponseDraftBody>(request);
+      const input = validateReviewsReferralsResponseDraftInput(body);
+      const draft = createReviewResponseDraft(input);
+      sendJson(response, 201, draft);
       return;
     }
 

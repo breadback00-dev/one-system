@@ -16,6 +16,7 @@ import {
 import { SectionCard } from "@one-system/ui";
 import {
   bookReactivationItemAtSlot,
+  generateReviewsResponseDraft,
   markReactivationItemHandled,
   runReactivationCampaign,
   runReviewsReferralsCampaign,
@@ -28,6 +29,8 @@ import {
   getReactivationRunFeedback,
 } from "./reactivation-feedback";
 import {
+  getReviewsDraftErrorMessage,
+  getReviewsDraftFeedback,
   getReviewsRunErrorMessage,
   getReviewsRunFeedback,
 } from "./reviews-referrals-feedback";
@@ -100,6 +103,30 @@ function getReviewsReadinessLabel(status: string) {
   return "Ready contacts are available for review/referral outreach.";
 }
 
+function getReviewsDraftSentimentLabel(sentiment: string) {
+  if (sentiment === "promoter") {
+    return "Promoter feedback";
+  }
+
+  if (sentiment === "recovery") {
+    return "Recovery-needed feedback";
+  }
+
+  return "Neutral feedback";
+}
+
+function getReviewsDraftActionLabel(action: string) {
+  if (action === "invite_public_review") {
+    return "Invite public review";
+  }
+
+  if (action === "offer_service_recovery") {
+    return "Offer service recovery";
+  }
+
+  return "Gather more detail";
+}
+
 function getModule2ReadinessChecks(args: {
   liveImportCount: number;
   dryRunImportCount: number;
@@ -170,6 +197,9 @@ export default async function HomePage({
   const queueActionFeedback = getQueueActionFeedback(resolvedSearchParams);
   const reviewsRunFeedback = getReviewsRunFeedback(resolvedSearchParams);
   const reviewsRunErrorMessage = getReviewsRunErrorMessage(resolvedSearchParams);
+  const reviewsDraftFeedback = getReviewsDraftFeedback(resolvedSearchParams);
+  const reviewsDraftErrorMessage =
+    getReviewsDraftErrorMessage(resolvedSearchParams);
   const [
     deliveryStatus,
     funnelSnapshot,
@@ -731,6 +761,57 @@ export default async function HomePage({
             </div>
             <button className="text-button" type="submit">
               Queue campaign
+            </button>
+          </form>
+        </SectionCard>
+
+        <SectionCard title="Draft Review Response">
+          {reviewsDraftFeedback ? (
+            <div className="notice-card">
+              <strong>Response draft ready</strong>
+              <p>
+                {getReviewsDraftSentimentLabel(reviewsDraftFeedback.sentiment)} •{" "}
+                {reviewsDraftFeedback.confidence} confidence
+              </p>
+              <p>{getReviewsDraftActionLabel(reviewsDraftFeedback.suggestedAction)}</p>
+              <blockquote className="message-context">
+                <span>{reviewsDraftFeedback.promptKey}</span>
+                <p>{reviewsDraftFeedback.draft}</p>
+              </blockquote>
+            </div>
+          ) : null}
+          {reviewsDraftErrorMessage ? (
+            <div className="notice-card notice-error">
+              <strong>Draft generation blocked</strong>
+              <p>{reviewsDraftErrorMessage}</p>
+              <p>Provide feedback text and try again.</p>
+            </div>
+          ) : null}
+          <p className="action-warning">
+            Generates a suggested operator reply based on recent client feedback so
+            staff can respond consistently and faster.
+          </p>
+          <form action={generateReviewsResponseDraft} className="control-form">
+            <label>
+              Client first name (optional)
+              <input
+                defaultValue=""
+                name="customerFirstName"
+                placeholder="e.g. Maya"
+                type="text"
+              />
+            </label>
+            <label>
+              Client feedback message
+              <textarea
+                defaultValue=""
+                name="customerMessage"
+                placeholder="Paste the inbound post-visit reply here..."
+                rows={4}
+              />
+            </label>
+            <button className="text-button" type="submit">
+              Generate draft
             </button>
           </form>
         </SectionCard>

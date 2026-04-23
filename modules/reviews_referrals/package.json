@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@one-system/ai": "0.1.0",
     "@one-system/database": "0.1.0",
     "@one-system/domain": "0.1.0"
   },

@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 
+import {
+  generateReviewResponseDraft,
+  type ReviewFeedbackSentiment,
+  type ReviewResponseAction,
+  type ReviewResponseConfidence,
+} from "@one-system/ai";
 import { createQueuedOutboundMessageEvent } from "@one-system/domain";
 import {
   appendEvents,
@@ -105,6 +111,22 @@ export interface RouteReviewsReferralsReplyResult {
   cooldownDays: number;
   queuedCount: number;
   queuedEventId?: string;
+}
+
+export interface CreateReviewResponseDraftInput {
+  workspaceId: string;
+  customerMessage: string;
+  customerFirstName?: string;
+}
+
+export interface CreateReviewResponseDraftResult {
+  ok: true;
+  workspaceId: string;
+  promptKey: string;
+  sentiment: ReviewFeedbackSentiment;
+  confidence: ReviewResponseConfidence;
+  suggestedNextAction: ReviewResponseAction;
+  draft: string;
 }
 
 const DEFAULT_CAMPAIGN_KEY = "reviews-referrals-default";
@@ -510,6 +532,27 @@ export async function routeReviewsReferralsReply(
     cooldownDays,
     queuedCount: 1,
     queuedEventId: queuedEvent.id,
+  };
+}
+
+export function createReviewResponseDraft(
+  input: CreateReviewResponseDraftInput,
+): CreateReviewResponseDraftResult {
+  const response = generateReviewResponseDraft({
+    customerMessage: input.customerMessage,
+    ...(input.customerFirstName
+      ? { customerFirstName: input.customerFirstName }
+      : {}),
+  });
+
+  return {
+    ok: true,
+    workspaceId: input.workspaceId,
+    promptKey: response.promptKey,
+    sentiment: response.sentiment,
+    confidence: response.confidence,
+    suggestedNextAction: response.suggestedNextAction,
+    draft: response.draft,
   };
 }
 
