@@ -9,6 +9,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx src/reviews-feedback.test.ts"
+    "test": "tsx src/reviews-feedback.test.ts && tsx src/platform-readiness.test.ts"
   }
 }

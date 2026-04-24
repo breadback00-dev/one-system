@@ -6,9 +6,9 @@ M1 - Platform Foundation
 
 ## Active Module
 
-Module 5 - Sales Enablement
+Module 6 - M1 Platform Closure
 
-Modules 1 through 4 are complete. Module 5 is now active by explicit approval.
+All five business modules are complete for M1 foundation scope. Module 6 is an approved post-module platform closure checkpoint, not a sixth business module.
 
 ## What Exists
 
@@ -144,6 +144,9 @@ Modules 1 through 4 are complete. Module 5 is now active by explicit approval.
 - dashboard feedback parser tests now cover Module 5 transcript capture and adapter sync URL states
 - local Module 5 hardening validation on 2026-04-24 passed `npm run typecheck`, `npm run test`, `npm run build`, `git diff --check`, and Prisma client generation
 - Module 5 sign-off/UAT evidence is packaged in `docs/module5-signoff.md`
+- Module 6 platform closure now has a typed domain readiness registry for shared foundation requirements and module boundaries
+- the dashboard now surfaces platform closure readiness and module boundary ownership/dependency visibility
+- domain tests now cover platform readiness counts, requirement evidence, and all five business module boundaries
 - med spa selected as first implementation niche
 
 ## What We Decided
@@ -164,15 +167,15 @@ Modules 1 through 4 are complete. Module 5 is now active by explicit approval.
 
 ## What Comes Next
 
-- keep Module 5 in sign-off/approval mode
+- keep Module 6 focused on M1 platform closure, not a new product module
 - keep Module 4 closed unless validation reveals a concrete regression
 - keep commits to meaningful module/capability checkpoints, not every small slice
 
 ## Immediate Next Step
 
-- get explicit approval before Module 6 planning or implementation
+- continue Module 6 platform closure by deciding whether explicit customer/staff/location entities are needed before M1 completion
 - keep validating any follow-up checkpoint with `npm run typecheck`, `npm run build`, and `npm run test`
-- wait for explicit user approval before any Module 6 planning or implementation
+- do not invent a sixth business module; the product remains five modules on one shared foundation
 
 ## How To Resume
 
@@ -183,4 +186,4 @@ Modules 1 through 4 are complete. Module 5 is now active by explicit approval.
 5. Read `docs/context-handoff.md` only if a new handoff needs to be written
 6. Run `git status --short`
 7. Review uncommitted files for the active module before editing
-8. Continue Module 5 unless the user explicitly says to switch modules
+8. Continue Module 6 platform closure unless the user explicitly says to switch modules

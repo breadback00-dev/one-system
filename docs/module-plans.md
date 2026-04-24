@@ -104,7 +104,7 @@ Seeded proof evidence (2026-04-23):
 
 ## Module 5 - Sales Enablement
 
-Status: Active. Foundation + sync/idempotency + rep-coaching reporting slice completed and verified.
+Status: Completed and signed off for M1 foundation scope.
 
 Completed checkpoints:
 
@@ -139,10 +139,36 @@ Suggested first slice:
 Remaining checkpoints:
 
 - targeted regression hardening only if new validation reveals concrete issues
-- wait for explicit approval before Module 6 planning or implementation
 
 Exit criteria:
 
 - one consultation can be ingested, analyzed, and viewed end-to-end
 - analysis output is traceable through first-class events
 - the design leaves room for real call-recording integrations without changing core entities
+
+## Module 6 - M1 Platform Closure
+
+Status: Active. This is not a sixth business module; it is the post-module platform closure checkpoint after all five product modules have foundation slices.
+
+Completed checkpoints:
+
+- domain now exposes a typed platform foundation readiness registry covering shared requirements and all five module boundaries
+- dashboard now surfaces platform closure readiness and module boundary ownership/dependency visibility
+- domain regression tests now assert all five business modules are covered and all foundation requirements include evidence
+
+Current implementation notes:
+
+- readiness is intentionally `partial` because customer lifecycle state, workflow metadata, and full dashboard user/session permissions remain future closure themes
+- module boundaries are explicit in code rather than only in docs
+
+Remaining checkpoints:
+
+- decide whether explicit customer/staff/location entities are needed before M1 can be marked complete
+- promote common workflow step/run metadata into `packages/workflows` if the next phase needs configurable workflows
+- add production user/session auth before multi-operator dashboard rollout
+
+Exit criteria:
+
+- platform foundation gaps are visible to operators and developers
+- all five modules have explicit ownership/dependency boundaries
+- M1 completion can be decided from concrete readiness evidence rather than memory

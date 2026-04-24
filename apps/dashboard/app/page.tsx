@@ -54,6 +54,7 @@ import {
   getSalesEnablementSyncErrorMessage,
   getSalesEnablementSyncFeedback,
 } from "./sales-enablement-feedback";
+import { getPlatformFoundationReadiness } from "@one-system/domain";
 
 const modules = [
   "Lead Capture + Instant Follow-Up",
@@ -415,6 +416,7 @@ export default async function HomePage({
     getSalesEnablementSyncFeedback(resolvedSearchParams);
   const salesEnablementSyncErrorMessage =
     getSalesEnablementSyncErrorMessage(resolvedSearchParams);
+  const platformReadiness = getPlatformFoundationReadiness();
   const [
     deliveryStatus,
     funnelSnapshot,
@@ -574,13 +576,70 @@ export default async function HomePage({
       <section className="panel">
         <h2>Current Build Focus</h2>
         <p>
-          Shared platform foundations are in place through Module 4. Module 5 is
-          now focused on consultation transcript capture, analysis, and operator
-          visibility.
+          All five business modules now have foundation slices. The active
+          checkpoint is platform closure: making shared entities, module
+          boundaries, and production readiness explicit before any next-phase
+          expansion.
         </p>
       </section>
 
       <section className="ops-grid">
+        <SectionCard title="Platform Foundation Closure">
+          <div className="stats-grid">
+            <div className="stat">
+              <span className="stat-label">Ready</span>
+              <strong>{platformReadiness.readyCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Partial</span>
+              <strong>{platformReadiness.partialCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Missing</span>
+              <strong>{platformReadiness.missingCount}</strong>
+            </div>
+          </div>
+          <div className="list-block">
+            {platformReadiness.requirements.map((requirement) => (
+              <div className="list-row" key={requirement.key}>
+                <div>
+                  <strong>{requirement.label}</strong>
+                  <p>{requirement.evidence}</p>
+                  {requirement.nextStep ? <p>{requirement.nextStep}</p> : null}
+                </div>
+                <span
+                  className={`pill ${
+                    requirement.status === "ready" ? "ready" : "needs_attention"
+                  }`}
+                >
+                  {requirement.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Module Boundary Registry">
+          <div className="list-block">
+            {platformReadiness.modules.map((module) => (
+              <div className="list-row" key={module.key}>
+                <div>
+                  <strong>{module.label}</strong>
+                  <p>{module.packageName}</p>
+                  <p>Owns {module.owns.join(", ")}</p>
+                </div>
+                <span
+                  className={`pill ${
+                    module.status === "completed" ? "ready" : "needs_attention"
+                  }`}
+                >
+                  {module.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+
         <SectionCard title="Funnel Snapshot">
           <div className="stats-grid">
             <div className="stat">
