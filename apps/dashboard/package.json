@@ -3,15 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "dotenv -e ../../.env -- next dev",
-    "build": "dotenv -e ../../.env -- next build",
-    "start": "dotenv -e ../../.env -- next start",
-    "test": "tsx app/reactivation-feedback.test.ts && tsx app/sales-enablement-feedback.test.ts",
+    "dev": "dotenv -e ../../.env -e ../../.env.local -- next dev",
+    "build": "dotenv -e ../../.env -e ../../.env.local -- next build",
+    "start": "dotenv -e ../../.env -e ../../.env.local -- next start",
+    "test": "tsx \"app/(app)/reactivation-feedback.test.ts\" && tsx \"app/(app)/sales-enablement-feedback.test.ts\"",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "format": "echo dashboard format step TBD"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.2.5",
     "@one-system/database": "0.1.0",
     "@one-system/paid-ads": "0.1.0",
     "@one-system/reactivation": "0.1.0",

@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+import "./marketing.css";
 
 export const metadata: Metadata = {
-  title: "One System",
-  description: "AI customer acquisition operating system",
+  title: "One System — Operator platform for appointment businesses",
+  description:
+    "One System captures, nurtures, and reactivates customers for appointment-based businesses. Five modules, one platform.",
 };
 
 export default function RootLayout({
@@ -13,8 +16,10 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    </ClerkProvider>
   );
 }

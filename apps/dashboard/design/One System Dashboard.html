@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>One System — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ─── Tokens ─── */
+:root {
+  --bg:          #f5ede0;
+  --surface:     #fffaf3;
+  --surface-2:   #f9f2e6;
+  --line:        rgba(31,27,22,0.10);
+  --line-strong: rgba(31,27,22,0.18);
+  --text:        #1f1b16;
+  --muted:       #7a6e63;
+  --faint:       #b0a496;
+
+  /* sidebar */
+  --rail:        #1c1814;
+  --rail-hover:  #2e2924;
+  --rail-active: #3d3530;
+  --rail-text:   #c9bfb3;
+  --rail-accent: #e8a87c;
+
+  /* semantic */
+  --green:       #3d6e35;
+  --green-bg:    rgba(61,110,53,0.10);
+  --amber:       #b87a12;
+  --amber-bg:    rgba(184,122,18,0.10);
+  --blue:        #2e5572;
+  --blue-bg:     rgba(46,85,114,0.10);
+  --red:         #9a3a1e;
+  --red-bg:      rgba(154,58,30,0.10);
+
+  --accent:      #a5502d;
+  --accent-bg:   rgba(165,80,45,0.09);
+
+  --font-ui:     'DM Sans', system-ui, sans-serif;
+  --font-brand:  Georgia, 'Times New Roman', serif;
+
+  --r-sm:  6px;
+  --r-md:  10px;
+  --r-lg:  14px;
+
+  --sidebar-w: 228px;
+  --topbar-h:  52px;
+}
+
+/* ─── Reset ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { font-family: var(--font-ui); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+button { cursor: pointer; font: inherit; border: none; background: none; }
+a { text-decoration: none; color: inherit; }
+
+/* ─── Shell ─── */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+
+/* ─── Sidebar ─── */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--rail);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-brand {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.sidebar-brand-name {
+  font-family: var(--font-brand);
+  font-size: 18px;
+  color: #f5ede0;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-brand-sub {
+  font-size: 11px;
+  color: var(--rail-text);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.sidebar-section {
+  padding: 18px 10px 6px;
+}
+
+.sidebar-section-label {
+  padding: 0 8px;
+  margin-bottom: 4px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(201,191,179,0.45);
+  font-weight: 600;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: var(--r-md);
+  color: var(--rail-text);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  user-select: none;
+}
+
+.nav-item:hover { background: var(--rail-hover); color: #f0e6d8; }
+.nav-item.active { background: var(--rail-active); color: #f5ede0; font-weight: 500; }
+
+.nav-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(201,191,179,0.3);
+}
+.nav-dot.green { background: #5a9e50; }
+.nav-dot.amber { background: #c8931e; }
+.nav-dot.blue  { background: #4a7fa8; }
+
+.nav-icon {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+.nav-item.active .nav-icon,
+.nav-item:hover .nav-icon { opacity: 1; }
+
+.nav-item-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--rail-accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.workspace-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: rgba(255,255,255,0.05);
+}
+
+.workspace-avatar {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.workspace-name { font-size: 12px; color: #f0e6d8; font-weight: 500; }
+.workspace-plan { font-size: 10px; color: var(--rail-text); }
+
+/* ─── Main ─── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── Topbar ─── */
+.topbar {
+  height: var(--topbar-h);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+}
+
+.topbar-title {
+  font-family: var(--font-brand);
+  font-size: 17px;
+  color: var(--text);
+  flex: 1;
+}
+
+.topbar-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.topbar-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-amber { background: var(--amber-bg); color: var(--amber); }
+.badge-blue  { background: var(--blue-bg);  color: var(--blue); }
+.badge-red   { background: var(--red-bg);   color: var(--red); }
+.badge-muted { background: rgba(0,0,0,0.05); color: var(--muted); }
+
+/* ─── Content area ─── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  scroll-behavior: smooth;
+}
+
+/* hide scrollbar but keep function */
+.content::-webkit-scrollbar { width: 4px; }
+.content::-webkit-scrollbar-track { background: transparent; }
+.content::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
+
+/* ─── Views ─── */
+.view { display: none; }
+.view.active { display: block; }
+
+/* ─── Pulse bar (overview) ─── */
+.pulse-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.pulse-cell {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.pulse-cell:hover {
+  border-color: var(--line-strong);
+  box-shadow: 0 4px 16px rgba(31,27,22,0.07);
+}
+
+.pulse-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pulse-value {
+  font-size: 28px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  font-family: var(--font-brand);
+  color: var(--text);
+}
+
+.pulse-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.pulse-status {
+  margin-top: 4px;
+}
+
+/* ─── Grid layouts ─── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+.grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.span-2 { grid-column: span 2; }
+
+/* ─── Section ─── */
+.section-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 10px;
+  margin-top: 24px;
+}
+
+.section-label:first-child { margin-top: 0; }
+
+/* ─── Card ─── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14px 18px 0;
+  gap: 12px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.card-action {
+  font-size: 11.5px;
+  color: var(--accent);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.card-body { padding: 12px 18px 16px; }
+
+/* ─── Metric strip ─── */
+.metric-strip {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 0 18px;
+}
+
+.metric-cell {
+  flex: 1;
+  padding: 12px 0 10px;
+  border-right: 1px solid var(--line);
+  padding-right: 16px;
+  margin-right: 16px;
+}
+
+.metric-cell:last-child { border-right: none; padding-right: 0; margin-right: 0; }
+
+.metric-val {
+  font-size: 22px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-brand);
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.metric-lbl {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.metric-delta {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.delta-up { color: var(--green); }
+.delta-dn { color: var(--red); }
+
+/* ─── Data table ─── */
+.data-table { width: 100%; border-collapse: collapse; }
+
+.data-table th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 0 18px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.data-table th:first-child { padding-left: 18px; }
+.data-table th:last-child  { padding-right: 18px; text-align: right; }
+
+.data-table td {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.data-table td:last-child { text-align: right; }
+
+.data-table tr:last-child td { border-bottom: none; }
+
+.data-table tr:hover td { background: var(--surface-2); }
+
+.td-primary { font-weight: 500; color: var(--text); }
+.td-muted   { color: var(--muted); font-size: 12px; }
+.td-num     { font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* ─── Pill ─── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.pill::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pill-green { background: var(--green-bg); color: var(--green); }
+.pill-green::before { background: var(--green); }
+.pill-amber { background: var(--amber-bg); color: var(--amber); }
+.pill-amber::before { background: var(--amber); }
+.pill-blue  { background: var(--blue-bg);  color: var(--blue); }
+.pill-blue::before { background: var(--blue); }
+.pill-red   { background: var(--red-bg);   color: var(--red); }
+.pill-red::before { background: var(--red); }
+.pill-muted { background: rgba(0,0,0,0.05); color: var(--muted); }
+.pill-muted::before { background: var(--faint); }
+.pill-accent { background: var(--accent-bg); color: var(--accent); }
+.pill-accent::before { background: var(--accent); }
+
+/* ─── Readiness list ─── */
+.readiness-list { display: flex; flex-direction: column; gap: 0; }
+
+.readiness-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.readiness-row:last-child { border-bottom: none; }
+
+.readiness-check {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.readiness-check.pass { background: var(--green-bg); }
+.readiness-check.fail { background: var(--amber-bg); }
+
+.readiness-check svg { width: 10px; height: 10px; }
+
+.readiness-text { flex: 1; }
+.readiness-name { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+.readiness-detail { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+
+/* ─── Message thread ─── */
+.thread-list { display: flex; flex-direction: column; gap: 0; }
+
+.thread-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.thread-row:last-child { border-bottom: none; }
+.thread-row:hover { background: var(--surface-2); }
+
+.thread-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  border: 1.5px solid rgba(165,80,45,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.thread-body { flex: 1; min-width: 0; }
+.thread-name { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+.thread-preview { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread-time { font-size: 11px; color: var(--faint); white-space: nowrap; }
+
+/* ─── Funnel ─── */
+.funnel {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 64px;
+  padding: 0 18px 12px;
+}
+
+.funnel-bar {
+  flex: 1;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  min-height: 8px;
+  transition: opacity 0.15s;
+}
+
+.funnel-bar:hover { opacity: 0.8; }
+
+/* ─── Platform module registry ─── */
+.module-registry { display: flex; flex-direction: column; gap: 0; }
+
+.module-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.module-row:last-child { border-bottom: none; }
+
+.module-num {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--faint);
+  letter-spacing: 0.05em;
+}
+
+.module-name { font-size: 13px; font-weight: 500; }
+.module-pkg  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+/* ─── Form ─── */
+.form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.form-group:last-child { margin-bottom: 0; }
+.form-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+.form-input, .form-select {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  padding: 8px 11px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 0.12s;
+}
+
+.form-input:focus, .form-select:focus { outline: none; border-color: var(--accent); }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r-md);
+  background: var(--text);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.btn-primary:hover { background: var(--accent); }
+
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--r-md);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.btn-secondary:hover { background: var(--surface-2); }
+
+/* ─── Alert ─── */
+.alert {
+  border-radius: var(--r-lg);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.alert-title { font-weight: 600; margin-bottom: 3px; }
+.alert-green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(61,110,53,0.2); }
+.alert-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(184,122,18,0.2); }
+
+/* ─── Score bar ─── */
+.score-bar {
+  height: 5px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+.score-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.6s cubic-bezier(.2,.8,.2,1);
+}
+
+/* ─── Rep card ─── */
+.rep-card {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rep-card:last-child { border-bottom: none; }
+
+.rep-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.rep-name { font-size: 13px; font-weight: 600; }
+.rep-score { font-size: 20px; font-family: var(--font-brand); font-weight: 400; }
+
+.rep-objection {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--muted);
+  padding: 3px 8px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+/* ─── Spend row ─── */
+.spend-rows { display: flex; flex-direction: column; gap: 0; }
+
+.spend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+}
+
+.spend-row:last-child { border-bottom: none; }
+
+/* ─── Platform section ─── */
+.platform-header {
+  background: var(--rail);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: 20px 22px 16px;
+  margin-bottom: 0;
+}
+
+.platform-header h2 {
+  font-family: var(--font-brand);
+  font-size: 20px;
+  color: #f5ede0;
+  margin-bottom: 4px;
+}
+
+.platform-header p {
+  font-size: 12.5px;
+  color: #9a8d80;
+  line-height: 1.5;
+}
+
+/* ─── Transitions ─── */
+.view { animation: fadeIn 0.18s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ───────── SIDEBAR ───────── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-name">One System</div>
+      <div class="sidebar-brand-sub">Med Spa · Demo Workspace</div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <div class="nav-item active" data-view="overview" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="1" y="1" width="6" height="6" rx="1.5"/>
+          <rect x="9" y="1" width="6" height="6" rx="1.5"/>
+          <rect x="1" y="9" width="6" height="6" rx="1.5"/>
+          <rect x="9" y="9" width="6" height="6" rx="1.5"/>
+        </svg>
+        Dashboard
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="flex:1">
+      <div class="sidebar-section-label">Modules</div>
+      <div class="nav-item" data-view="m1" onclick="navigate(this)">
+        <div class="nav-dot green"></div>
+        Lead Capture
+        <span class="nav-item-count">3</span>
+      </div>
+      <div class="nav-item" data-view="m2" onclick="navigate(this)">
+        <div class="nav-dot green"></div>
+        Reactivation
+        <span class="nav-item-count">7</span>
+      </div>
+      <div class="nav-item" data-view="m3" onclick="navigate(this)">
+        <div class="nav-dot amber"></div>
+        Reviews &amp; Referrals
+      </div>
+      <div class="nav-item" data-view="m4" onclick="navigate(this)">
+        <div class="nav-dot green"></div>
+        Paid Ads
+      </div>
+      <div class="nav-item" data-view="m5" onclick="navigate(this)">
+        <div class="nav-dot blue"></div>
+        Sales Enablement
+      </div>
+
+      <div class="sidebar-section-label" style="margin-top:16px">System</div>
+      <div class="nav-item" data-view="platform" onclick="navigate(this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="8" r="6.5"/>
+          <path d="M8 4.5v4l2.5 1.5"/>
+        </svg>
+        Platform Closure
+        <span class="nav-item-count" style="color:#9a8d80">M6</span>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="workspace-chip">
+        <div class="workspace-avatar">MS</div>
+        <div>
+          <div class="workspace-name">Medspa Demo</div>
+          <div class="workspace-plan">Production · M6 Active</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ───────── MAIN ───────── -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar" id="topbar">
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-meta" id="topbar-date">24 Apr 2026</div>
+      <div class="topbar-badge badge-green" id="topbar-status">
+        <span>5 / 5 modules live</span>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- ── OVERVIEW ── -->
+      <div class="view active" id="view-overview">
+
+        <div class="pulse-bar">
+          <div class="pulse-cell" onclick="navigate(document.querySelector('[data-view=m1]'))">
+            <div class="pulse-label">Lead Capture</div>
+            <div class="pulse-value">3</div>
+            <div class="pulse-sub">new leads · last 7d</div>
+            <div class="pulse-status"><span class="pill pill-green">ready</span></div>
+          </div>
+          <div class="pulse-cell" onclick="navigate(document.querySelector('[data-view=m2]'))">
+            <div class="pulse-label">Reactivation</div>
+            <div class="pulse-value">47</div>
+            <div class="pulse-sub">contacts eligible</div>
+            <div class="pulse-status"><span class="pill pill-green">ready</span></div>
+          </div>
+          <div class="pulse-cell" onclick="navigate(document.querySelector('[data-view=m3]'))">
+            <div class="pulse-label">Reviews &amp; Referrals</div>
+            <div class="pulse-value">12</div>
+            <div class="pulse-sub">follow-ups queued</div>
+            <div class="pulse-status"><span class="pill pill-amber">needs attention</span></div>
+          </div>
+          <div class="pulse-cell" onclick="navigate(document.querySelector('[data-view=m4]'))">
+            <div class="pulse-label">Paid Ads</div>
+            <div class="pulse-value">£125</div>
+            <div class="pulse-sub">spend · this month</div>
+            <div class="pulse-status"><span class="pill pill-green">ready</span></div>
+          </div>
+          <div class="pulse-cell" onclick="navigate(document.querySelector('[data-view=m5]'))">
+            <div class="pulse-label">Sales Enablement</div>
+            <div class="pulse-value">7.4</div>
+            <div class="pulse-sub">avg consultation score</div>
+            <div class="pulse-status"><span class="pill pill-blue">2 reps tracked</span></div>
+          </div>
+        </div>
+
+        <div class="section-label">Funnel snapshot</div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="metric-strip">
+            <div class="metric-cell">
+              <div class="metric-val">18</div>
+              <div class="metric-lbl">New leads</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">11</div>
+              <div class="metric-lbl">Responded</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">6</div>
+              <div class="metric-lbl">Qualified</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">4</div>
+              <div class="metric-lbl">Booked</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">61%</div>
+              <div class="metric-lbl">Response rate</div>
+              <div class="metric-delta delta-up">↑ 8pp vs last month</div>
+            </div>
+          </div>
+          <div class="funnel" id="funnel-bars" style="height: 180px; padding: 12px 18px"></div>
+        </div>
+
+        <div class="grid-2">
+
+          <!-- Recent leads -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Recent leads</div>
+              <div class="card-action" onclick="navigate(document.querySelector('[data-view=m1]'))">View all →</div>
+            </div>
+            <table class="data-table" style="margin-top:10px">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Source</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><div class="td-primary">Sarah M.</div><div class="td-muted">sms · +44 7700 900012</div></td>
+                  <td><div class="td-muted">facebook_ads</div><div class="td-muted">spring-promo</div></td>
+                  <td><span class="pill pill-green">booked</span></td>
+                </tr>
+                <tr>
+                  <td><div class="td-primary">James T.</div><div class="td-muted">email · j.thomas@…</div></td>
+                  <td><div class="td-muted">organic</div><div class="td-muted">—</div></td>
+                  <td><span class="pill pill-amber">qualified</span></td>
+                </tr>
+                <tr>
+                  <td><div class="td-primary">Priya K.</div><div class="td-muted">sms · +44 7911 000987</div></td>
+                  <td><div class="td-muted">referral</div><div class="td-muted">—</div></td>
+                  <td><span class="pill pill-blue">replied</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Delivery status -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Delivery status</div>
+              <span class="pill pill-green" style="font-size:11px">Twilio · live</span>
+            </div>
+            <div class="metric-strip" style="margin-top:10px">
+              <div class="metric-cell">
+                <div class="metric-val">24</div>
+                <div class="metric-lbl">Queued</div>
+              </div>
+              <div class="metric-cell">
+                <div class="metric-val">19</div>
+                <div class="metric-lbl">Delivered</div>
+              </div>
+              <div class="metric-cell">
+                <div class="metric-val">2</div>
+                <div class="metric-lbl">Failed</div>
+              </div>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr><th>Channel</th><th>Contact</th><th>Delivered</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="pill pill-muted">SMS</span></td>
+                  <td class="td-muted">contact_a3f9…</td>
+                  <td class="td-muted">Today 11:42</td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-muted">EMAIL</span></td>
+                  <td class="td-muted">contact_b17c…</td>
+                  <td class="td-muted">Today 09:15</td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-muted">SMS</span></td>
+                  <td class="td-muted">contact_e8a2…</td>
+                  <td class="td-muted">Yesterday</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+        <!-- Conversation threads -->
+        <div class="section-label">Active conversations</div>
+        <div class="card" style="margin-bottom: 0">
+          <div class="thread-list">
+            <div class="thread-row">
+              <div class="thread-avatar">SM</div>
+              <div class="thread-body">
+                <div class="thread-name">Sarah M. <span class="pill pill-green" style="margin-left:6px">promoter</span></div>
+                <div class="thread-preview">"I'd definitely recommend you to my friends, the treatment was amazing…"</div>
+              </div>
+              <div class="thread-time">11:42</div>
+            </div>
+            <div class="thread-row">
+              <div class="thread-avatar">JT</div>
+              <div class="thread-body">
+                <div class="thread-name">James T. <span class="pill pill-amber" style="margin-left:6px">follow-up needed</span></div>
+                <div class="thread-preview">"Thanks for reaching out — can you send more info on pricing?"</div>
+              </div>
+              <div class="thread-time">09:18</div>
+            </div>
+            <div class="thread-row">
+              <div class="thread-avatar">PK</div>
+              <div class="thread-body">
+                <div class="thread-name">Priya K. <span class="pill pill-blue" style="margin-left:6px">referral intent</span></div>
+                <div class="thread-preview">"My friend Emma mentioned she came to you — can I book in?"</div>
+              </div>
+              <div class="thread-time">Yesterday</div>
+            </div>
+            <div class="thread-row">
+              <div class="thread-avatar">OB</div>
+              <div class="thread-body">
+                <div class="thread-name">Olivia B. <span class="pill pill-muted" style="margin-left:6px">delivered</span></div>
+                <div class="thread-preview">Reactivation message sent · no reply yet</div>
+              </div>
+              <div class="thread-time">23 Apr</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── M1: LEAD CAPTURE ── -->
+      <div class="view" id="view-m1">
+        <div class="section-label">Module 1 — Lead Capture + Instant Follow-Up</div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="metric-strip">
+            <div class="metric-cell">
+              <div class="metric-val">18</div>
+              <div class="metric-lbl">Total leads</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">&lt;4 min</div>
+              <div class="metric-lbl">Avg response time</div>
+              <div class="metric-delta delta-up">↑ target met</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">11</div>
+              <div class="metric-lbl">Responded</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">4</div>
+              <div class="metric-lbl">Booked</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Lead pipeline</div>
+        <div class="card" style="margin-bottom:16px">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="padding: 8px 18px">Lead</th>
+                <th style="padding: 8px 18px">Source</th>
+                <th style="padding: 8px 18px">Channel</th>
+                <th style="padding: 8px 18px">Status</th>
+                <th style="padding: 8px 18px">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="td-primary">Sarah M.</div></td>
+                <td><div class="td-muted">facebook_ads · spring-promo</div></td>
+                <td><span class="pill pill-muted">SMS</span></td>
+                <td><span class="pill pill-green">booked</span></td>
+                <td class="td-muted td-num">23 Apr 14:30</td>
+              </tr>
+              <tr>
+                <td><div class="td-primary">James T.</div></td>
+                <td><div class="td-muted">organic</div></td>
+                <td><span class="pill pill-muted">EMAIL</span></td>
+                <td><span class="pill pill-amber">qualified</span></td>
+                <td class="td-muted td-num">22 Apr 09:15</td>
+              </tr>
+              <tr>
+                <td><div class="td-primary">Priya K.</div></td>
+                <td><div class="td-muted">referral</div></td>
+                <td><span class="pill pill-muted">SMS</span></td>
+                <td><span class="pill pill-blue">replied</span></td>
+                <td class="td-muted td-num">21 Apr 18:02</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section-label">Conversation threads</div>
+        <div class="card">
+          <div class="thread-list">
+            <div class="thread-row">
+              <div class="thread-avatar">SM</div>
+              <div class="thread-body">
+                <div class="thread-name">Sarah M.</div>
+                <div class="thread-preview">"Amazing, yes please book me in for next Tuesday."</div>
+              </div>
+              <div class="thread-time">Today 14:55</div>
+            </div>
+            <div class="thread-row">
+              <div class="thread-avatar">JT</div>
+              <div class="thread-body">
+                <div class="thread-name">James T.</div>
+                <div class="thread-preview">"Can you send me the pricing for the hydrafacial?"</div>
+              </div>
+              <div class="thread-time">Today 09:18</div>
+            </div>
+            <div class="thread-row">
+              <div class="thread-avatar">PK</div>
+              <div class="thread-body">
+                <div class="thread-name">Priya K.</div>
+                <div class="thread-preview">"Emma mentioned she came here — can I book in for a consultation?"</div>
+              </div>
+              <div class="thread-time">Yesterday</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── M2: REACTIVATION ── -->
+      <div class="view" id="view-m2">
+        <div class="section-label">Module 2 — Database Reactivation Engine</div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="metric-strip">
+            <div class="metric-cell">
+              <div class="metric-val">47</div>
+              <div class="metric-lbl">Eligible contacts</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">24</div>
+              <div class="metric-lbl">Queued</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">7</div>
+              <div class="metric-lbl">Replied</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">3</div>
+              <div class="metric-lbl">Booked</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">29%</div>
+              <div class="metric-lbl">Reply rate</div>
+              <div class="metric-delta delta-up">↑ vs 18% baseline</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Readiness -->
+          <div class="card">
+            <div class="card-head"><div class="card-title">Campaign readiness</div><span class="pill pill-green">ready</span></div>
+            <div class="readiness-list" style="margin-top:8px">
+              <div class="readiness-row">
+                <div class="readiness-check pass">
+                  <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+                </div>
+                <div class="readiness-text">
+                  <div class="readiness-name">Dormant list imported</div>
+                  <div class="readiness-detail">312 contacts loaded across 2 live imports</div>
+                </div>
+              </div>
+              <div class="readiness-row">
+                <div class="readiness-check pass">
+                  <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+                </div>
+                <div class="readiness-text">
+                  <div class="readiness-name">Audience ready</div>
+                  <div class="readiness-detail">47 contacts currently eligible</div>
+                </div>
+              </div>
+              <div class="readiness-row">
+                <div class="readiness-check pass">
+                  <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+                </div>
+                <div class="readiness-text">
+                  <div class="readiness-name">Campaign executed</div>
+                  <div class="readiness-detail">6 recent run groups visible</div>
+                </div>
+              </div>
+              <div class="readiness-row">
+                <div class="readiness-check pass">
+                  <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+                </div>
+                <div class="readiness-text">
+                  <div class="readiness-name">Booking path available</div>
+                  <div class="readiness-detail">4 generated booking slots available</div>
+                </div>
+              </div>
+              <div class="readiness-row">
+                <div class="readiness-check pass">
+                  <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+                </div>
+                <div class="readiness-text">
+                  <div class="readiness-name">Outcomes measurable</div>
+                  <div class="readiness-detail">24 queued · 7 replied · 3 booked</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Run campaign form -->
+          <div class="card">
+            <div class="card-head"><div class="card-title">Run campaign</div></div>
+            <div class="card-body">
+              <div class="alert alert-green" style="margin-bottom:14px">
+                <div class="alert-title">Last run complete</div>
+                reactivation-default · 12 queued · 3 skipped by cooldown
+              </div>
+              <div class="form-group">
+                <div class="form-label">Campaign key</div>
+                <input class="form-input" value="reactivation-default" type="text">
+              </div>
+              <div class="form-group">
+                <div class="form-label">Audience</div>
+                <select class="form-select">
+                  <option>All dormant contacts</option>
+                  <option>Stale leads only</option>
+                  <option>Past customers only</option>
+                </select>
+              </div>
+              <div class="form-row" style="margin-bottom:14px">
+                <div class="form-group" style="margin:0">
+                  <div class="form-label">Inactive days</div>
+                  <input class="form-input" value="30" type="number" min="7">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <div class="form-label">Cooldown days</div>
+                  <input class="form-input" value="14" type="number">
+                </div>
+              </div>
+              <button class="btn-primary" style="width:100%">Queue reactivation run</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Action queue</div>
+        <div class="card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="padding: 8px 18px">Contact</th>
+                <th style="padding: 8px 18px">Segment</th>
+                <th style="padding: 8px 18px">Stage</th>
+                <th style="padding: 8px 18px">Last active</th>
+                <th style="padding: 8px 18px">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="td-primary">Olivia B.</div><div class="td-muted">+44 7700 900098</div></td>
+                <td><span class="pill pill-muted">Past customer</span></td>
+                <td><span class="pill pill-green">qualified, waiting to book</span></td>
+                <td class="td-muted td-num">62 days ago</td>
+                <td><button class="btn-secondary" style="padding:4px 10px;font-size:11px">Book slot</button></td>
+              </tr>
+              <tr>
+                <td><div class="td-primary">Marcus W.</div><div class="td-muted">m.white@…</div></td>
+                <td><span class="pill pill-muted">Stale lead</span></td>
+                <td><span class="pill pill-amber">replied, needs follow-up</span></td>
+                <td class="td-muted td-num">44 days ago</td>
+                <td><button class="btn-secondary" style="padding:4px 10px;font-size:11px">Follow up</button></td>
+              </tr>
+              <tr>
+                <td><div class="td-primary">Chloe R.</div><div class="td-muted">+44 7911 555321</div></td>
+                <td><span class="pill pill-muted">Past customer</span></td>
+                <td><span class="pill pill-blue">delivered, no reply</span></td>
+                <td class="td-muted td-num">91 days ago</td>
+                <td><button class="btn-secondary" style="padding:4px 10px;font-size:11px">Mark handled</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── M3: REVIEWS ── -->
+      <div class="view" id="view-m3">
+        <div class="section-label">Module 3 — Reviews &amp; Referrals Automation</div>
+
+        <div class="alert alert-amber">
+          <div class="alert-title">Attention needed</div>
+          12 follow-up actions are queued but no referral source has been captured yet from referral-intent replies.
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="metric-strip">
+            <div class="metric-cell">
+              <div class="metric-val">38</div>
+              <div class="metric-lbl">Queued</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">31</div>
+              <div class="metric-lbl">Delivered</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">14</div>
+              <div class="metric-lbl">Replied</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">9</div>
+              <div class="metric-lbl">Promoters</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">4</div>
+              <div class="metric-lbl">Referral intent</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head"><div class="card-title">Follow-up routing</div></div>
+            <div class="metric-strip" style="margin-top:8px">
+              <div class="metric-cell">
+                <div class="metric-val">5</div>
+                <div class="metric-lbl">Promoter</div>
+              </div>
+              <div class="metric-cell">
+                <div class="metric-val">4</div>
+                <div class="metric-lbl">Referral</div>
+              </div>
+              <div class="metric-cell">
+                <div class="metric-val">3</div>
+                <div class="metric-lbl">Recovery</div>
+              </div>
+            </div>
+            <div class="readiness-list" style="margin-top:8px">
+              <div class="readiness-row">
+                <div class="readiness-check pass">
+                  <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+                </div>
+                <div class="readiness-text">
+                  <div class="readiness-name">Post-visit audience ready</div>
+                  <div class="readiness-detail">22 contacts currently eligible</div>
+                </div>
+              </div>
+              <div class="readiness-row">
+                <div class="readiness-check pass">
+                  <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+                </div>
+                <div class="readiness-text">
+                  <div class="readiness-name">Campaign executed</div>
+                  <div class="readiness-detail">38 review/referral requests queued</div>
+                </div>
+              </div>
+              <div class="readiness-row">
+                <div class="readiness-check fail">
+                  <svg viewBox="0 0 10 10" fill="none" stroke="#b87a12" stroke-width="1.8"><path d="M3 3l4 4M7 3l-4 4"/></svg>
+                </div>
+                <div class="readiness-text">
+                  <div class="readiness-name">Referral source visibility</div>
+                  <div class="readiness-detail">4 referral-intent replies, 0 source captures recorded yet</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-title">Run campaign</div></div>
+            <div class="card-body">
+              <div class="form-group">
+                <div class="form-label">Campaign key</div>
+                <input class="form-input" value="reviews-referrals-default" type="text">
+              </div>
+              <div class="form-row" style="margin-bottom:14px">
+                <div class="form-group" style="margin:0">
+                  <div class="form-label">Visit days ago</div>
+                  <input class="form-input" value="2" type="number">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <div class="form-label">Cooldown days</div>
+                  <input class="form-input" value="14" type="number">
+                </div>
+              </div>
+              <button class="btn-primary" style="width:100%">Queue reviews/referrals run</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Recent outcomes</div>
+        <div class="card">
+          <table class="data-table">
+            <thead>
+              <tr><th style="padding: 8px 18px">Contact</th><th style="padding: 8px 18px">Channel</th><th style="padding: 8px 18px">Sentiment</th><th style="padding: 8px 18px">Status</th><th style="padding: 8px 18px">Queued</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="td-primary">Sarah M.</div></td>
+                <td><span class="pill pill-muted">SMS</span></td>
+                <td><span class="pill pill-green">promoter</span></td>
+                <td><span class="pill pill-green">promoter queued</span></td>
+                <td class="td-muted td-num">23 Apr</td>
+              </tr>
+              <tr>
+                <td><div class="td-primary">Priya K.</div></td>
+                <td><span class="pill pill-muted">SMS</span></td>
+                <td><span class="pill pill-accent">referral intent</span></td>
+                <td><span class="pill pill-amber">referral queued</span></td>
+                <td class="td-muted td-num">22 Apr</td>
+              </tr>
+              <tr>
+                <td><div class="td-primary">Marcus W.</div></td>
+                <td><span class="pill pill-muted">EMAIL</span></td>
+                <td><span class="pill pill-red">recovery</span></td>
+                <td><span class="pill pill-red">recovery queued</span></td>
+                <td class="td-muted td-num">20 Apr</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── M4: PAID ADS ── -->
+      <div class="view" id="view-m4">
+        <div class="section-label">Module 4 — Paid Ads + Lead Nurturing</div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="metric-strip">
+            <div class="metric-cell">
+              <div class="metric-val">£125</div>
+              <div class="metric-lbl">Total spend</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">£41.67</div>
+              <div class="metric-lbl">Cost per lead</div>
+              <div class="metric-delta delta-dn">↓ vs £55 target</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">£62.50</div>
+              <div class="metric-lbl">Cost per qualified</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">3</div>
+              <div class="metric-lbl">Leads attributed</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">1</div>
+              <div class="metric-lbl">Booked</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Source performance -->
+          <div class="card">
+            <div class="card-head"><div class="card-title">Source performance</div></div>
+            <table class="data-table" style="margin-top:10px">
+              <thead>
+                <tr><th>Source</th><th>Leads</th><th>Qualified</th><th>CPL</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><div class="td-primary">facebook_ads</div><div class="td-muted">spring-promo</div></td>
+                  <td class="td-num">2</td>
+                  <td class="td-num">1</td>
+                  <td class="td-num">£62.50</td>
+                </tr>
+                <tr>
+                  <td><div class="td-primary">google_ads</div><div class="td-muted">medspa-brand</div></td>
+                  <td class="td-num">1</td>
+                  <td class="td-num">1</td>
+                  <td class="td-num">£25.00</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Spend log + record -->
+          <div class="card">
+            <div class="card-head"><div class="card-title">Record spend</div></div>
+            <div class="card-body">
+              <div class="form-row" style="margin-bottom:10px">
+                <div class="form-group" style="margin:0">
+                  <div class="form-label">Source</div>
+                  <select class="form-select">
+                    <option>facebook_ads</option>
+                    <option>google_ads</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0">
+                  <div class="form-label">Amount (£)</div>
+                  <input class="form-input" placeholder="0.00" type="number">
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:14px">
+                <div class="form-label">Campaign</div>
+                <input class="form-input" placeholder="campaign-tag" type="text">
+              </div>
+              <button class="btn-primary" style="width:100%">Record spend entry</button>
+
+              <div style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px">
+                <div class="form-label" style="margin-bottom:8px">Recent entries</div>
+                <div class="spend-rows">
+                  <div class="spend-row" style="padding:7px 0">
+                    <div><div class="td-primary">facebook_ads</div><div class="td-muted">spring-promo</div></div>
+                    <div class="td-num" style="font-weight:600">£125.00</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Nurture outcomes</div>
+        <div class="card" style="height: 114px">
+          <table class="data-table">
+            <thead>
+              <tr><th style="padding: 8px 18px">Lead</th><th style="padding: 8px 18px">Source</th><th style="padding: 8px 18px">Channel</th><th style="padding: 8px 18px">Status</th><th style="padding: 8px 18px">Queued</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="td-primary">Sarah M.</div></td>
+                <td><div class="td-muted">facebook_ads · spring-promo</div></td>
+                <td><span class="pill pill-muted">SMS</span></td>
+                <td><span class="pill pill-green">booked</span></td>
+                <td class="td-muted td-num">23 Apr</td>
+              </tr>
+              <tr>
+                <td><div class="td-primary">James T.</div></td>
+                <td><div class="td-muted">google_ads · medspa-brand</div></td>
+                <td><span class="pill pill-muted">EMAIL</span></td>
+                <td><span class="pill pill-amber">qualified</span></td>
+                <td class="td-muted td-num">21 Apr</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── M5: SALES ── -->
+      <div class="view" id="view-m5">
+        <div class="section-label">Module 5 — Sales Enablement System</div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="metric-strip">
+            <div class="metric-cell">
+              <div class="metric-val">7.4</div>
+              <div class="metric-lbl">Avg score</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">4</div>
+              <div class="metric-lbl">Transcripts</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">3</div>
+              <div class="metric-lbl">Booking-ready</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val">2</div>
+              <div class="metric-lbl">Reps tracked</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+
+          <!-- Rep performance -->
+          <div class="card">
+            <div class="card-head"><div class="card-title">Rep coaching</div></div>
+            <div class="rep-card">
+              <div class="rep-header">
+                <div>
+                  <div class="rep-name">Jordan A.</div>
+                  <div class="td-muted" style="font-size:11px">3 consultations · 2 booking-ready</div>
+                </div>
+                <div class="rep-score">8.1</div>
+              </div>
+              <div class="score-bar"><div class="score-fill" style="width:81%;background:var(--green)"></div></div>
+              <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+                <span class="rep-objection">Top objection: pricing</span>
+                <span class="rep-objection">Focus: close technique</span>
+              </div>
+            </div>
+            <div class="rep-card">
+              <div class="rep-header">
+                <div>
+                  <div class="rep-name">Mia C.</div>
+                  <div class="td-muted" style="font-size:11px">1 consultation · 1 booking-ready</div>
+                </div>
+                <div class="rep-score">6.3</div>
+              </div>
+              <div class="score-bar"><div class="score-fill" style="width:63%;background:var(--amber)"></div></div>
+              <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+                <span class="rep-objection">Top objection: downtime concerns</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ingest transcript -->
+          <div class="card">
+            <div class="card-head"><div class="card-title">Ingest transcript</div></div>
+            <div class="card-body">
+              <div class="form-group">
+                <div class="form-label">Appointment ID</div>
+                <input class="form-input" placeholder="appt_…" type="text">
+              </div>
+              <div class="form-group">
+                <div class="form-label">Rep name</div>
+                <input class="form-input" placeholder="Agent name (optional)" type="text">
+              </div>
+              <div class="form-group" style="margin-bottom:14px">
+                <div class="form-label">Transcript</div>
+                <textarea class="form-input" rows="4" placeholder="Paste consultation transcript…" style="resize:vertical"></textarea>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button class="btn-primary" style="flex:1">Ingest &amp; analyse</button>
+                <button class="btn-secondary">Sync adapter</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Transcripts</div>
+        <div class="card">
+          <table class="data-table">
+            <thead>
+              <tr><th style="padding: 8px 18px">Appointment</th><th style="padding: 8px 18px">Rep</th><th style="padding: 8px 18px">Score</th><th style="padding: 8px 18px">Booking intent</th><th style="padding: 8px 18px">Ingested</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="td-muted td-num">appt_a1b2…</td>
+                <td><div class="td-primary">Jordan A.</div></td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span class="td-num" style="font-weight:600">8.4</span>
+                    <div style="width:60px"><div class="score-bar"><div class="score-fill" style="width:84%;background:var(--green)"></div></div></div>
+                  </div>
+                </td>
+                <td><span class="pill pill-green">strong</span></td>
+                <td class="td-muted td-num">23 Apr</td>
+              </tr>
+              <tr>
+                <td class="td-muted td-num">appt_c3d4…</td>
+                <td><div class="td-primary">Mia C.</div></td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span class="td-num" style="font-weight:600">6.3</span>
+                    <div style="width:60px"><div class="score-bar"><div class="score-fill" style="width:63%;background:var(--amber)"></div></div></div>
+                  </div>
+                </td>
+                <td><span class="pill pill-amber">moderate</span></td>
+                <td class="td-muted td-num">20 Apr</td>
+              </tr>
+              <tr>
+                <td class="td-muted td-num">appt_e5f6…</td>
+                <td><div class="td-primary">Jordan A.</div></td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span class="td-num" style="font-weight:600">7.9</span>
+                    <div style="width:60px"><div class="score-bar"><div class="score-fill" style="width:79%;background:var(--green)"></div></div></div>
+                  </div>
+                </td>
+                <td><span class="pill pill-green">strong</span></td>
+                <td class="td-muted td-num">18 Apr</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── PLATFORM ── -->
+      <div class="view" id="view-platform">
+        <div class="card" style="margin-bottom:16px;overflow:hidden">
+          <div class="platform-header">
+            <h2>Platform Closure — M6</h2>
+            <p>Post-module checkpoint. All five modules have foundation slices. Active work: shared entities, module boundaries, and production readiness.</p>
+          </div>
+          <div class="metric-strip">
+            <div class="metric-cell">
+              <div class="metric-val" style="color:var(--green)">7</div>
+              <div class="metric-lbl">Ready</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val" style="color:var(--amber)">3</div>
+              <div class="metric-lbl">Partial</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-val" style="color:var(--red)">2</div>
+              <div class="metric-lbl">Missing</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Foundation requirements</div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="readiness-list">
+            <div class="readiness-row">
+              <div class="readiness-check pass">
+                <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+              </div>
+              <div class="readiness-text">
+                <div class="readiness-name">Accounts &amp; workspaces</div>
+                <div class="readiness-detail">workspace_medspa_demo provisioned and verified</div>
+              </div>
+              <span class="pill pill-green">ready</span>
+            </div>
+            <div class="readiness-row">
+              <div class="readiness-check pass">
+                <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+              </div>
+              <div class="readiness-text">
+                <div class="readiness-name">Contacts, leads &amp; customers</div>
+                <div class="readiness-detail">Canonical contact entity used across all five modules</div>
+              </div>
+              <span class="pill pill-green">ready</span>
+            </div>
+            <div class="readiness-row">
+              <div class="readiness-check pass">
+                <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+              </div>
+              <div class="readiness-text">
+                <div class="readiness-name">Conversations &amp; message history</div>
+                <div class="readiness-detail">Inbound/outbound thread model active across M1–M3</div>
+              </div>
+              <span class="pill pill-green">ready</span>
+            </div>
+            <div class="readiness-row">
+              <div class="readiness-check pass">
+                <svg viewBox="0 0 10 10" fill="none" stroke="#3d6e35" stroke-width="1.8"><path d="M2 5l2 2 4-4"/></svg>
+              </div>
+              <div class="readiness-text">
+                <div class="readiness-name">Workflow engine</div>
+                <div class="readiness-detail">packages/workflows: triggers, sequencing, retries, scheduling</div>
+              </div>
+              <span class="pill pill-green">ready</span>
+            </div>
+            <div class="readiness-row">
+              <div class="readiness-check fail">
+                <svg viewBox="0 0 10 10" fill="none" stroke="#b87a12" stroke-width="1.8"><path d="M3 3l4 4M7 3l-4 4"/></svg>
+              </div>
+              <div class="readiness-text">
+                <div class="readiness-name">Customer lifecycle state</div>
+                <div class="readiness-detail">Explicit lifecycle entity not yet promoted from module-local state</div>
+              </div>
+              <span class="pill pill-amber">partial</span>
+            </div>
+            <div class="readiness-row">
+              <div class="readiness-check fail">
+                <svg viewBox="0 0 10 10" fill="none" stroke="#b87a12" stroke-width="1.8"><path d="M3 3l4 4M7 3l-4 4"/></svg>
+              </div>
+              <div class="readiness-text">
+                <div class="readiness-name">Production auth &amp; sessions</div>
+                <div class="readiness-detail">Multi-operator dashboard requires user/session model before rollout</div>
+              </div>
+              <span class="pill pill-amber">partial</span>
+            </div>
+            <div class="readiness-row">
+              <div class="readiness-check fail">
+                <svg viewBox="0 0 10 10" fill="none" stroke="#9a3a1e" stroke-width="1.8"><path d="M3 3l4 4M7 3l-4 4"/></svg>
+              </div>
+              <div class="readiness-text">
+                <div class="readiness-name">Configurable workflow metadata</div>
+                <div class="readiness-detail">Workflow step/run metadata not yet promoted to packages/workflows</div>
+              </div>
+              <span class="pill pill-red">missing</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Module boundary registry</div>
+        <div class="card">
+          <div class="module-registry">
+            <div class="module-row">
+              <div class="module-num">M1</div>
+              <div>
+                <div class="module-name">Lead Capture + Instant Follow-Up</div>
+                <div class="module-pkg">@one-system/lead-capture · owns: leads, qualification, instant-followup</div>
+              </div>
+              <span class="pill pill-green">completed</span>
+            </div>
+            <div class="module-row">
+              <div class="module-num">M2</div>
+              <div>
+                <div class="module-name">Database Reactivation</div>
+                <div class="module-pkg">@one-system/reactivation · owns: dormant-contacts, campaigns, booking-queue</div>
+              </div>
+              <span class="pill pill-green">completed</span>
+            </div>
+            <div class="module-row">
+              <div class="module-num">M3</div>
+              <div>
+                <div class="module-name">Reviews + Referrals</div>
+                <div class="module-pkg">@one-system/reviews-referrals · owns: review-requests, referral-tracking, sentiment-routing</div>
+              </div>
+              <span class="pill pill-green">completed</span>
+            </div>
+            <div class="module-row">
+              <div class="module-num">M4</div>
+              <div>
+                <div class="module-name">Paid Ads + Lead Nurturing</div>
+                <div class="module-pkg">@one-system/paid-ads · owns: attribution, nurture-sequences, roi-reporting</div>
+              </div>
+              <span class="pill pill-green">completed</span>
+            </div>
+            <div class="module-row">
+              <div class="module-num">M5</div>
+              <div>
+                <div class="module-name">Sales Enablement</div>
+                <div class="module-pkg">@one-system/sales-enablement · owns: transcripts, scoring, rep-coaching</div>
+              </div>
+              <span class="pill pill-green">completed</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+const VIEWS = {
+  overview:  { title: 'Dashboard',                    status: '5 / 5 modules live',          statusClass: 'badge-green' },
+  m1:        { title: 'Lead Capture',                  status: 'Module 1 · completed',         statusClass: 'badge-green' },
+  m2:        { title: 'Database Reactivation',         status: 'Module 2 · 47 eligible',       statusClass: 'badge-green' },
+  m3:        { title: 'Reviews & Referrals',           status: 'Needs attention',              statusClass: 'badge-amber' },
+  m4:        { title: 'Paid Ads + Lead Nurturing',     status: 'Module 4 · £125 spend',        statusClass: 'badge-green' },
+  m5:        { title: 'Sales Enablement',              status: '2 reps · avg 7.4',             statusClass: 'badge-blue' },
+  platform:  { title: 'Platform Closure',              status: 'M6 active · 2 items missing',  statusClass: 'badge-amber' },
+};
+
+function navigate(el) {
+  const key = el.dataset.view;
+  if (!key) return;
+
+  // nav active state
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector(`[data-view="${key}"]`).classList.add('active');
+
+  // view switch
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + key).classList.add('active');
+
+  // topbar
+  const meta = VIEWS[key];
+  document.getElementById('topbar-title').textContent = meta.title;
+  const badge = document.getElementById('topbar-status');
+  badge.textContent = meta.status;
+  badge.className = 'topbar-badge ' + meta.statusClass;
+
+  // persist
+  localStorage.setItem('os-view', key);
+}
+
+// funnel bars
+(function() {
+  const data = [
+    { label: 'New',        val: 18, color: '#c5b3a2' },
+    { label: 'Responded',  val: 11, color: '#a5502d' },
+    { label: 'Qualified',  val: 6,  color: '#7a3820' },
+    { label: 'Booked',     val: 4,  color: '#4a1e0e' },
+  ];
+  const max = data[0].val;
+  const container = document.getElementById('funnel-bars');
+  data.forEach(d => {
+    const bar = document.createElement('div');
+    bar.className = 'funnel-bar';
+    const pct = Math.round((d.val / max) * 100);
+    bar.style.cssText = `height:${pct}%;background:${d.color};`;
+    bar.title = `${d.label}: ${d.val}`;
+    container.appendChild(bar);
+  });
+})();
+
+// restore last view
+(function() {
+  const saved = localStorage.getItem('os-view');
+  if (saved && VIEWS[saved]) {
+    const el = document.querySelector(`[data-view="${saved}"]`);
+    if (el) navigate(el);
+  }
+})();
+
+// tweaks
+window.addEventListener('message', e => {
+  if (e.data?.type === '__activate_edit_mode')   document.getElementById('tweaks-panel').style.display = 'flex';
+  if (e.data?.type === '__deactivate_edit_mode') document.getElementById('tweaks-panel').style.display = 'none';
+});
+window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+</script>
+
+<!-- Tweaks panel -->
+<div id="tweaks-panel" style="display:none;position:fixed;bottom:20px;right:20px;width:220px;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-lg);box-shadow:0 8px 32px rgba(31,27,22,0.14);z-index:9999;flex-direction:column;overflow:hidden">
+  <div style="padding:12px 14px 8px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted)">Tweaks</span>
+    <button onclick="document.getElementById('tweaks-panel').style.display='none';window.parent.postMessage({type:'__edit_mode_dismissed'},'*')" style="color:var(--muted);font-size:16px;line-height:1;cursor:pointer;background:none;border:none">×</button>
+  </div>
+  <div style="padding:12px 14px;display:flex;flex-direction:column;gap:12px">
+    <div>
+      <div style="font-size:10.5px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Accent colour</div>
+      <input type="color" value="#a5502d" oninput="document.documentElement.style.setProperty('--accent',this.value)" style="width:100%;height:32px;border:1px solid var(--line);border-radius:6px;cursor:pointer">
+    </div>
+    <div>
+      <div style="font-size:10.5px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Sidebar width</div>
+      <input type="range" min="180" max="280" value="228" oninput="document.documentElement.style.setProperty('--sidebar-w',this.value+'px')" style="width:100%">
+    </div>
+    <div>
+      <div style="font-size:10.5px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Table density</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="document.querySelectorAll('.data-table td').forEach(td=>td.style.padding='7px 18px')" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:6px;font-size:11px;cursor:pointer;background:var(--surface-2)">Tight</button>
+        <button onclick="document.querySelectorAll('.data-table td').forEach(td=>td.style.padding='10px 18px')" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:6px;font-size:11px;cursor:pointer;background:var(--surface-2)">Default</button>
+        <button onclick="document.querySelectorAll('.data-table td').forEach(td=>td.style.padding='14px 18px')" style="flex:1;padding:5px;border:1px solid var(--line);border-radius:6px;font-size:11px;cursor:pointer;background:var(--surface-2)">Loose</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
