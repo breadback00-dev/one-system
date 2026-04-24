@@ -1,11 +1,21 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { appConfig } from "@one-system/config";
+import {
+  appConfig,
+  getOutboundDeliveryClaimTimeoutMs,
+  getSensitiveDataRetentionDays,
+} from "@one-system/config";
 import {
   classifyReviewReferralReplySignals,
   createReactivationFollowUpHandledEvent,
   createReactivationImportCompletedEvent,
 } from "@one-system/domain";
-import type { Contact, Lead, LeadAttribution, Workspace } from "@one-system/domain";
+import type {
+  ConsultationTranscript,
+  Contact,
+  Lead,
+  LeadAttribution,
+  Workspace,
+} from "@one-system/domain";
 import type { DomainEvent } from "@one-system/domain";
 import type {
   AppointmentBookedPayload,
@@ -13,9 +23,12 @@ import type {
   MessageInboundReceivedPayload,
   MessageOutboundQueuedPayload,
   MessageSuppressedPayload,
-  ReviewReferralSourceCapturedPayload,
   ReactivationFollowUpHandledPayload,
   ReactivationImportCompletedPayload,
+  ReviewReferralSourceCapturedPayload,
+  SalesAnalysisCompletedPayload,
+  SalesScoreRecordedPayload,
+  SalesTranscriptReceivedPayload,
 } from "@one-system/domain";
 import type {
   ConversationThread,
@@ -24,6 +37,7 @@ import type {
   QueuedMessage,
 } from "@one-system/messaging";
 import { isOptOutKeywordMessage, OPT_OUT_KEYWORDS } from "./opt-out";
+import { redactSensitiveText, sensitiveEventNames } from "./sensitive-data";
 
 export const DATABASE_SCHEMA_PATH = "packages/database/prisma/schema.prisma";
 const DEFAULT_WORKSPACE_ID = "workspace_medspa_demo";
@@ -85,6 +99,21 @@ export interface SaveAppointmentTransactionResult {
   events: DomainEvent[];
 }
 
+export interface SaveConsultationTranscriptTransactionInput {
+  transcript: ConsultationTranscript;
+  events: DomainEvent<
+    | SalesTranscriptReceivedPayload
+    | SalesAnalysisCompletedPayload
+    | SalesScoreRecordedPayload
+  >[];
+}
+
+export interface SaveConsultationTranscriptTransactionResult {
+  workspace: Workspace;
+  transcript: ConsultationTranscript;
+  events: DomainEvent[];
+}
+
 function getDefaultWorkspace(): Workspace {
   return {
     id: DEFAULT_WORKSPACE_ID,
@@ -96,6 +125,37 @@ function getDefaultWorkspace(): Workspace {
 
 function normalizeOptional(value: string | undefined) {
   return value && value.length > 0 ? value : null;
+}
+
+function normalizeOptionalTrimmed(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+function mapConsultationTranscriptPrismaError(error: unknown): Error | null {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return null;
+  }
+
+  if (
+    error.code === "P2002" &&
+    typeof error.meta?.target === "string" &&
+    error.meta.target.includes("ConsultationTranscript_workspaceId_source_externalId_key")
+  ) {
+    return new Error("Transcript already imported for this source/externalId.");
+  }
+
+  if (
+    error.code === "P2022" &&
+    typeof error.meta?.column === "string" &&
+    error.meta.column.includes("externalId")
+  ) {
+    return new Error(
+      "ConsultationTranscript schema mismatch for `externalId`. Run `npm run db:push` and retry.",
+    );
+  }
+
+  return null;
 }
 
 function toOptionalNumber(value: Prisma.Decimal): number {
@@ -241,6 +301,54 @@ function toPaidAdsSpendEntry(record: {
   };
 }
 
+function toConsultationTranscriptRecord(record: {
+  id: string;
+  workspaceId: string;
+  contactId: string;
+  leadId: string | null;
+  appointmentId: string | null;
+  externalId: string | null;
+  agentName: string | null;
+  source: string;
+  transcriptText: string;
+  summary: string;
+  promptKey: string;
+  overallScore: number;
+  rapportScore: number;
+  needsScore: number;
+  objectionHandlingScore: number;
+  bookingIntentScore: number;
+  primaryObjection: string | null;
+  nextStep: string;
+  createdAt: Date;
+}): ConsultationTranscript {
+  return {
+    id: record.id,
+    workspaceId: record.workspaceId,
+    contactId: record.contactId,
+    source: record.source as ConsultationTranscript["source"],
+    transcriptText: record.transcriptText,
+    summary: record.summary,
+    promptKey: record.promptKey,
+    scorecard: {
+      overallScore: record.overallScore,
+      rapportScore: record.rapportScore,
+      needsScore: record.needsScore,
+      objectionHandlingScore: record.objectionHandlingScore,
+      bookingIntentScore: record.bookingIntentScore,
+      nextStep: record.nextStep,
+      ...(record.primaryObjection
+        ? { primaryObjection: record.primaryObjection }
+        : {}),
+    },
+    createdAt: record.createdAt,
+    ...(record.leadId ? { leadId: record.leadId } : {}),
+    ...(record.appointmentId ? { appointmentId: record.appointmentId } : {}),
+    ...(record.externalId ? { externalId: record.externalId } : {}),
+    ...(record.agentName ? { agentName: record.agentName } : {}),
+  };
+}
+
 async function ensureWorkspace(workspaceId: string): Promise<Workspace> {
   const fallback = getDefaultWorkspace();
   const record = await prisma.workspace.upsert({
@@ -257,28 +365,98 @@ async function ensureWorkspace(workspaceId: string): Promise<Workspace> {
   return toWorkspaceRecord(record);
 }
 
+function withEventContactId(event: DomainEvent, contactId: string): DomainEvent {
+  if (
+    !event.payload ||
+    typeof event.payload !== "object" ||
+    Array.isArray(event.payload)
+  ) {
+    return event;
+  }
+
+  return {
+    ...event,
+    payload: {
+      ...(event.payload as Record<string, unknown>),
+      contactId,
+    },
+  };
+}
+
 export async function saveLeadTransaction(
   input: SaveLeadTransactionInput,
 ): Promise<SaveLeadTransactionResult> {
   const workspace = await ensureWorkspace(input.lead.workspaceId);
 
   const result = await prisma.$transaction(async (tx) => {
-    const contact = await tx.contact.create({
-      data: {
-        id: input.contact.id,
-        workspaceId: input.contact.workspaceId,
-        firstName: input.contact.firstName,
-        lastName: normalizeOptional(input.contact.lastName),
-        email: normalizeOptional(input.contact.email),
-        phone: normalizeOptional(input.contact.phone),
-      },
-    });
+    const contactEmail = normalizeOptional(input.contact.email);
+    const contactPhone = normalizeOptional(input.contact.phone);
+    const matchingContacts =
+      contactEmail || contactPhone
+        ? await tx.contact.findMany({
+            where: {
+              workspaceId: input.contact.workspaceId,
+              OR: [
+                ...(contactEmail ? [{ email: contactEmail }] : []),
+                ...(contactPhone ? [{ phone: contactPhone }] : []),
+              ],
+            },
+          })
+        : [];
+    const uniqueMatchingContacts = [
+      ...new Map(matchingContacts.map((contact) => [contact.id, contact])).values(),
+    ];
 
+    if (uniqueMatchingContacts.length > 1) {
+      throw new Error(
+        "Lead email and phone match different existing contacts; merge contacts before creating this lead.",
+      );
+    }
+
+    const existingContact = uniqueMatchingContacts[0];
+    const contact = existingContact
+      ? await tx.contact.update({
+          where: { id: existingContact.id },
+          data: {
+            firstName: input.contact.firstName,
+            lastName: normalizeOptional(input.contact.lastName) ?? existingContact.lastName,
+            email: contactEmail ?? existingContact.email,
+            phone: contactPhone ?? existingContact.phone,
+          },
+        })
+      : await tx.contact.create({
+          data: {
+            id: input.contact.id,
+            workspaceId: input.contact.workspaceId,
+            firstName: input.contact.firstName,
+            lastName: normalizeOptional(input.contact.lastName),
+            email: contactEmail,
+            phone: contactPhone,
+          },
+        });
+    const eventsToPersist = input.events.map((event) =>
+      withEventContactId(event, contact.id),
+    );
+
+    if (input.lead.contactId !== contact.id) {
+      eventsToPersist.forEach((event) => {
+        if (
+          event.payload &&
+          typeof event.payload === "object" &&
+          !Array.isArray(event.payload) &&
+          "leadId" in event.payload
+        ) {
+          (event.payload as Record<string, unknown>).leadId = input.lead.id;
+        }
+      });
+    }
+
+    const leadContactId = contact.id;
     const lead = await tx.lead.create({
       data: {
         id: input.lead.id,
         workspaceId: input.lead.workspaceId,
-        contactId: input.lead.contactId,
+        contactId: leadContactId,
         source: input.lead.source,
         status: input.lead.status,
         campaignId: normalizeOptional(input.lead.campaignId),
@@ -291,13 +469,13 @@ export async function saveLeadTransaction(
     });
 
     const events = await Promise.all(
-      input.events.map((event) =>
+      eventsToPersist.map((event) =>
         tx.event.create({
           data: {
             id: event.id,
             workspaceId: event.workspaceId,
             name: event.name,
-            payload: event.payload as Prisma.InputJsonValue,
+            payload: event.payload as unknown as Prisma.InputJsonValue,
             occurredAt: event.occurredAt,
           },
         }),
@@ -343,7 +521,7 @@ export async function saveAppointmentTransaction(
             id: event.id,
             workspaceId: event.workspaceId,
             name: event.name,
-            payload: event.payload as Prisma.InputJsonValue,
+            payload: event.payload as unknown as Prisma.InputJsonValue,
             occurredAt: event.occurredAt,
           },
         }),
@@ -372,6 +550,81 @@ export async function saveAppointmentTransaction(
   };
 }
 
+export async function saveConsultationTranscriptTransaction(
+  input: SaveConsultationTranscriptTransactionInput,
+): Promise<SaveConsultationTranscriptTransactionResult> {
+  const workspace = await ensureWorkspace(input.transcript.workspaceId);
+  const externalId = normalizeOptionalTrimmed(input.transcript.externalId);
+
+  let result: {
+    transcript: ConsultationTranscript;
+    events: DomainEvent[];
+  };
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const transcript = await tx.consultationTranscript.create({
+        data: {
+          id: input.transcript.id,
+          workspaceId: input.transcript.workspaceId,
+          contactId: input.transcript.contactId,
+          leadId: normalizeOptional(input.transcript.leadId),
+          appointmentId: normalizeOptional(input.transcript.appointmentId),
+          agentName: normalizeOptional(input.transcript.agentName),
+          source: input.transcript.source,
+          transcriptText: redactSensitiveText(input.transcript.transcriptText),
+          summary: redactSensitiveText(input.transcript.summary),
+          promptKey: input.transcript.promptKey,
+          overallScore: input.transcript.scorecard.overallScore,
+          rapportScore: input.transcript.scorecard.rapportScore,
+          needsScore: input.transcript.scorecard.needsScore,
+          objectionHandlingScore: input.transcript.scorecard.objectionHandlingScore,
+          bookingIntentScore: input.transcript.scorecard.bookingIntentScore,
+          primaryObjection: normalizeOptional(
+            input.transcript.scorecard.primaryObjection
+              ? redactSensitiveText(input.transcript.scorecard.primaryObjection)
+              : undefined,
+          ),
+          nextStep: redactSensitiveText(input.transcript.scorecard.nextStep),
+          createdAt: input.transcript.createdAt,
+          ...(externalId ? { externalId } : {}),
+        },
+      });
+
+      const events = await Promise.all(
+        input.events.map((event) =>
+          tx.event.create({
+            data: {
+              id: event.id,
+              workspaceId: event.workspaceId,
+              name: event.name,
+              payload: event.payload as unknown as Prisma.InputJsonValue,
+              occurredAt: event.occurredAt,
+            },
+          }),
+        ),
+      );
+
+      return {
+        transcript: toConsultationTranscriptRecord(transcript),
+        events: events.map(toDomainEvent),
+      };
+    });
+  } catch (error) {
+    const mappedError = mapConsultationTranscriptPrismaError(error);
+    if (mappedError) {
+      throw mappedError;
+    }
+
+    throw error;
+  }
+
+  return {
+    workspace,
+    transcript: result.transcript,
+    events: result.events,
+  };
+}
+
 export async function appendEvents(events: DomainEvent[]): Promise<void> {
   if (events.length === 0) {
     return;
@@ -384,12 +637,71 @@ export async function appendEvents(events: DomainEvent[]): Promise<void> {
           id: event.id,
           workspaceId: event.workspaceId,
           name: event.name,
-          payload: event.payload as Prisma.InputJsonValue,
+          payload: event.payload as unknown as Prisma.InputJsonValue,
           occurredAt: event.occurredAt,
         },
       }),
     ),
   );
+}
+
+export interface SensitiveDataRetentionResult {
+  cutoff: string;
+  transcriptCount: number;
+  messageCount: number;
+  eventCount: number;
+  deliveryAttemptCount: number;
+}
+
+export async function enforceSensitiveDataRetentionPolicy(args: {
+  workspaceId?: string;
+  olderThanDays?: number;
+} = {}): Promise<SensitiveDataRetentionResult> {
+  const retentionDays = Math.max(
+    1,
+    Math.floor(args.olderThanDays ?? getSensitiveDataRetentionDays()),
+  );
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  const workspaceFilter = args.workspaceId
+    ? { workspaceId: args.workspaceId }
+    : {};
+  const [transcripts, messages, events, deliveryAttempts] =
+    await prisma.$transaction([
+      prisma.consultationTranscript.deleteMany({
+        where: {
+          ...workspaceFilter,
+          createdAt: { lt: cutoff },
+        },
+      }),
+      prisma.message.deleteMany({
+        where: {
+          ...workspaceFilter,
+          createdAt: { lt: cutoff },
+        },
+      }),
+      prisma.event.deleteMany({
+        where: {
+          ...workspaceFilter,
+          name: { in: [...sensitiveEventNames] },
+          occurredAt: { lt: cutoff },
+        },
+      }),
+      prisma.outboundDeliveryAttempt.deleteMany({
+        where: {
+          ...workspaceFilter,
+          status: { in: ["delivered", "failed"] },
+          createdAt: { lt: cutoff },
+        },
+      }),
+    ]);
+
+  return {
+    cutoff: cutoff.toISOString(),
+    transcriptCount: transcripts.count,
+    messageCount: messages.count,
+    eventCount: events.count,
+    deliveryAttemptCount: deliveryAttempts.count,
+  };
 }
 
 export async function getRecentEvents(limit = 25): Promise<DomainEvent[]> {
@@ -402,29 +714,81 @@ export async function getRecentEvents(limit = 25): Promise<DomainEvent[]> {
 }
 
 export async function getPendingQueuedMessages(limit = 25): Promise<QueuedMessage[]> {
-  const [queuedEvents, deliveredEvents, suppressedEvents] = await Promise.all([
-    prisma.event.findMany({
-      where: { name: "message.outbound_queued" },
-      orderBy: { occurredAt: "asc" },
-      take: limit * 4,
-    }),
-    prisma.event.findMany({
-      where: { name: "message.delivered" },
-      orderBy: { occurredAt: "desc" },
-      take: limit * 8,
-    }),
-    prisma.event.findMany({
-      where: { name: "message.suppressed" },
-      orderBy: { occurredAt: "desc" },
-      take: limit * 8,
-    }),
-  ]);
+  const staleClaimCutoff = new Date(
+    Date.now() - getOutboundDeliveryClaimTimeoutMs(),
+  );
+  const queuedEvents = await prisma.event.findMany({
+    where: { name: "message.outbound_queued" },
+    orderBy: { occurredAt: "asc" },
+    take: Math.max(limit * 20, 100),
+  });
+
+  if (queuedEvents.length === 0) {
+    return [];
+  }
+
+  const queuedEventIds = queuedEvents.map((event) => event.id);
+  const handledEventIdFilters = queuedEventIds.map((queuedEventId) => ({
+    payload: {
+      path: ["queuedEventId"],
+      equals: queuedEventId,
+    },
+  }));
+  const [
+    deliveredMessages,
+    activeDeliveryAttempts,
+    deliveredEvents,
+    suppressedEvents,
+  ] =
+    await Promise.all([
+      prisma.message.findMany({
+        where: {
+          queuedEventId: { in: queuedEventIds },
+        },
+        select: { queuedEventId: true },
+      }),
+      prisma.outboundDeliveryAttempt.findMany({
+        where: {
+          queuedEventId: { in: queuedEventIds },
+          OR: [
+            { status: "delivered" },
+            {
+              status: "sending",
+              claimedAt: { gte: staleClaimCutoff },
+            },
+          ],
+        },
+        select: {
+          queuedEventId: true,
+        },
+      }),
+      prisma.event.findMany({
+        where: {
+          name: "message.delivered",
+          OR: handledEventIdFilters,
+        },
+      }),
+      prisma.event.findMany({
+        where: {
+          name: "message.suppressed",
+          OR: handledEventIdFilters,
+        },
+      }),
+    ]);
 
   const handledIds = new Set(
-    deliveredEvents
-      .map((event) => event.payload as unknown as MessageDeliveredPayload)
-      .map((payload) => payload.queuedEventId),
+    deliveredMessages
+      .map((message) => message.queuedEventId)
+      .filter((queuedEventId): queuedEventId is string => Boolean(queuedEventId)),
   );
+  for (const attempt of activeDeliveryAttempts) {
+    handledIds.add(attempt.queuedEventId);
+  }
+  for (const event of deliveredEvents) {
+    handledIds.add(
+      (event.payload as unknown as MessageDeliveredPayload).queuedEventId,
+    );
+  }
   for (const event of suppressedEvents) {
     handledIds.add(
       (event.payload as unknown as MessageSuppressedPayload).queuedEventId,
@@ -455,6 +819,83 @@ export async function getPendingQueuedMessages(limit = 25): Promise<QueuedMessag
       return new Date(message.deliverAfter).getTime() <= now;
     })
     .slice(0, limit);
+}
+
+export async function claimQueuedMessageDelivery(
+  message: QueuedMessage,
+): Promise<boolean> {
+  const claimedAt = new Date();
+  const staleClaimCutoff = new Date(
+    claimedAt.getTime() - getOutboundDeliveryClaimTimeoutMs(),
+  );
+
+  try {
+    await prisma.outboundDeliveryAttempt.create({
+      data: {
+        queuedEventId: message.queuedEventId,
+        workspaceId: message.workspaceId,
+        contactId: message.contactId,
+        channel: message.channel,
+        destination: message.destination,
+        status: "sending",
+        claimedAt,
+      },
+    });
+    return true;
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const updated = await prisma.outboundDeliveryAttempt.updateMany({
+        where: {
+          queuedEventId: message.queuedEventId,
+          OR: [
+            { status: "failed" },
+            {
+              status: "sending",
+              claimedAt: { lt: staleClaimCutoff },
+            },
+          ],
+        },
+        data: {
+          workspaceId: message.workspaceId,
+          contactId: message.contactId,
+          channel: message.channel,
+          destination: message.destination,
+          status: "sending",
+          provider: null,
+          errorMessage: null,
+          failedAt: null,
+          claimedAt,
+          attemptCount: { increment: 1 },
+        },
+      });
+
+      return updated.count > 0;
+    }
+
+    throw error;
+  }
+}
+
+export async function markQueuedMessageDeliveryFailed(args: {
+  queuedEventId: string;
+  provider?: string;
+  errorMessage: string;
+}): Promise<void> {
+  await prisma.outboundDeliveryAttempt.updateMany({
+    where: {
+      queuedEventId: args.queuedEventId,
+      status: "sending",
+    },
+    data: {
+      status: "failed",
+      ...(args.provider ? { provider: args.provider } : {}),
+      errorMessage: args.errorMessage.slice(0, 500),
+      failedAt: new Date(),
+    },
+  });
 }
 
 export async function getDeliveryStatus(): Promise<DeliveryStatusSnapshot> {
@@ -825,6 +1266,105 @@ export interface PaidAdsOutcomeReport {
   outcomes: PaidAdsOutcomeRecord[];
 }
 
+export interface ConsultationTranscriptContext {
+  appointmentId: string;
+  contactId: string;
+  leadId?: string;
+  contactFirstName: string;
+  startsAt: string;
+}
+
+export interface ConsultationTranscriptOverviewItem {
+  transcriptId: string;
+  appointmentId?: string;
+  contactId: string;
+  leadId?: string;
+  externalId?: string;
+  agentName?: string;
+  firstName: string;
+  source: ConsultationTranscript["source"];
+  summary: string;
+  overallScore: number;
+  bookingIntentScore: number;
+  primaryObjection?: string;
+  nextStep: string;
+  createdAt: string;
+  appointmentStartsAt?: string;
+}
+
+export interface SalesRepPerformanceItem {
+  agentName: string;
+  transcriptCount: number;
+  averageOverallScore: number;
+  averageRapportScore: number;
+  averageNeedsScore: number;
+  averageObjectionHandlingScore: number;
+  averageBookingIntentScore: number;
+  bookingReadyCount: number;
+  topObjection?: string;
+  coachingFocus: string;
+}
+
+export interface SalesEnablementReport {
+  workspaceId: string;
+  transcriptCount: number;
+  averageOverallScore: number;
+  averageRapportScore: number;
+  averageNeedsScore: number;
+  averageObjectionHandlingScore: number;
+  averageBookingIntentScore: number;
+  bookingReadyCount: number;
+  objectionCounts: Array<{
+    label: string;
+    count: number;
+  }>;
+  repPerformance: SalesRepPerformanceItem[];
+  transcripts: ConsultationTranscriptOverviewItem[];
+}
+
+function getSalesRepCoachingFocus(args: {
+  averageRapportScore: number;
+  averageNeedsScore: number;
+  averageObjectionHandlingScore: number;
+  averageBookingIntentScore: number;
+}): string {
+  const focusAreas = [
+    {
+      key: "rapport",
+      score: args.averageRapportScore,
+      guidance: "Build rapport earlier with more empathy-led opening questions.",
+    },
+    {
+      key: "needs",
+      score: args.averageNeedsScore,
+      guidance: "Ask deeper discovery questions before recommending treatment.",
+    },
+    {
+      key: "objection",
+      score: args.averageObjectionHandlingScore,
+      guidance: "Strengthen objection handling with pricing/value reframes.",
+    },
+    {
+      key: "booking",
+      score: args.averageBookingIntentScore,
+      guidance: "Use clearer booking closes and confirm the next concrete step.",
+    },
+  ] as const;
+
+  const lowestArea = [...focusAreas].sort(
+    (left, right) => left.score - right.score,
+  )[0];
+  if (!lowestArea) {
+    return "Collect more transcript data before assigning a coaching focus.";
+  }
+
+  if (lowestArea.score >= 4.2) {
+    return "Maintain strong performance and share best-call examples with the team.";
+  }
+
+  return lowestArea.guidance;
+}
+
 export async function getRecentLeadOverview(limit = 6): Promise<LeadOverviewItem[]> {
   const leads = await prisma.lead.findMany({
     orderBy: { createdAt: "desc" },
@@ -1005,6 +1545,231 @@ export async function getRecentAppointmentOverview(
       ? { outcome: appointment.outcome as "scheduled" | "completed" | "cancelled" | "no_show" }
       : {}),
   }));
+}
+
+export async function getConsultationTranscriptContext(args: {
+  workspaceId: string;
+  appointmentId: string;
+}): Promise<ConsultationTranscriptContext> {
+  const appointment = await prisma.appointment.findFirst({
+    where: {
+      workspaceId: args.workspaceId,
+      id: args.appointmentId,
+    },
+    include: {
+      contact: true,
+    },
+  });
+
+  if (!appointment) {
+    throw new Error("`appointmentId` does not match an existing appointment.");
+  }
+
+  return {
+    appointmentId: appointment.id,
+    contactId: appointment.contactId,
+    contactFirstName: appointment.contact.firstName,
+    startsAt: appointment.startsAt.toISOString(),
+    ...(appointment.leadId ? { leadId: appointment.leadId } : {}),
+  };
+}
+
+export async function getSalesEnablementReport(args: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<SalesEnablementReport> {
+  const transcripts = await prisma.consultationTranscript.findMany({
+    where: {
+      workspaceId: args.workspaceId,
+    },
+    include: {
+      contact: true,
+      appointment: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: Math.max(1, Math.min(args.limit ?? 25, 100)),
+  });
+
+  const objectionCountsMap = new Map<string, number>();
+  for (const transcript of transcripts) {
+    if (!transcript.primaryObjection) {
+      continue;
+    }
+
+    objectionCountsMap.set(
+      transcript.primaryObjection,
+      (objectionCountsMap.get(transcript.primaryObjection) ?? 0) + 1,
+    );
+  }
+
+  const transcriptCount = transcripts.length;
+  const sumScores = transcripts.reduce(
+    (totals, transcript) => ({
+      overall: totals.overall + transcript.overallScore,
+      rapport: totals.rapport + transcript.rapportScore,
+      needs: totals.needs + transcript.needsScore,
+      objectionHandling:
+        totals.objectionHandling + transcript.objectionHandlingScore,
+      bookingIntent: totals.bookingIntent + transcript.bookingIntentScore,
+    }),
+    {
+      overall: 0,
+      rapport: 0,
+      needs: 0,
+      objectionHandling: 0,
+      bookingIntent: 0,
+    },
+  );
+
+  const toAverage = (value: number) =>
+    transcriptCount === 0 ? 0 : Number((value / transcriptCount).toFixed(1));
+  const repPerformanceMap = new Map<string, {
+    transcriptCount: number;
+    sumOverall: number;
+    sumRapport: number;
+    sumNeeds: number;
+    sumObjectionHandling: number;
+    sumBookingIntent: number;
+    bookingReadyCount: number;
+    objectionCounts: Map<string, number>;
+  }>();
+  for (const transcript of transcripts) {
+    const agentName = transcript.agentName?.trim() || "unassigned";
+    const existing = repPerformanceMap.get(agentName);
+    const bucket = existing ?? {
+      transcriptCount: 0,
+      sumOverall: 0,
+      sumRapport: 0,
+      sumNeeds: 0,
+      sumObjectionHandling: 0,
+      sumBookingIntent: 0,
+      bookingReadyCount: 0,
+      objectionCounts: new Map<string, number>(),
+    };
+
+    bucket.transcriptCount += 1;
+    bucket.sumOverall += transcript.overallScore;
+    bucket.sumRapport += transcript.rapportScore;
+    bucket.sumNeeds += transcript.needsScore;
+    bucket.sumObjectionHandling += transcript.objectionHandlingScore;
+    bucket.sumBookingIntent += transcript.bookingIntentScore;
+    bucket.bookingReadyCount += transcript.bookingIntentScore >= 4 ? 1 : 0;
+    if (transcript.primaryObjection) {
+      bucket.objectionCounts.set(
+        transcript.primaryObjection,
+        (bucket.objectionCounts.get(transcript.primaryObjection) ?? 0) + 1,
+      );
+    }
+
+    if (!existing) {
+      repPerformanceMap.set(agentName, bucket);
+    }
+  }
+  const repPerformance = [...repPerformanceMap.entries()]
+    .map(([agentName, bucket]) => {
+      const toRepAverage = (value: number) =>
+        Number((value / bucket.transcriptCount).toFixed(1));
+      const averageRapportScore = toRepAverage(bucket.sumRapport);
+      const averageNeedsScore = toRepAverage(bucket.sumNeeds);
+      const averageObjectionHandlingScore = toRepAverage(
+        bucket.sumObjectionHandling,
+      );
+      const averageBookingIntentScore = toRepAverage(bucket.sumBookingIntent);
+      const topObjectionEntry = [...bucket.objectionCounts.entries()].sort(
+        (left, right) => right[1] - left[1],
+      )[0];
+
+      return {
+        agentName,
+        transcriptCount: bucket.transcriptCount,
+        averageOverallScore: toRepAverage(bucket.sumOverall),
+        averageRapportScore,
+        averageNeedsScore,
+        averageObjectionHandlingScore,
+        averageBookingIntentScore,
+        bookingReadyCount: bucket.bookingReadyCount,
+        ...(topObjectionEntry ? { topObjection: topObjectionEntry[0] } : {}),
+        coachingFocus: getSalesRepCoachingFocus({
+          averageRapportScore,
+          averageNeedsScore,
+          averageObjectionHandlingScore,
+          averageBookingIntentScore,
+        }),
+      } satisfies SalesRepPerformanceItem;
+    })
+    .sort((left, right) => {
+      if (left.transcriptCount !== right.transcriptCount) {
+        return right.transcriptCount - left.transcriptCount;
+      }
+
+      return right.averageOverallScore - left.averageOverallScore;
+    })
+    .slice(0, 6);
+
+  return {
+    workspaceId: args.workspaceId,
+    transcriptCount,
+    averageOverallScore: toAverage(sumScores.overall),
+    averageRapportScore: toAverage(sumScores.rapport),
+    averageNeedsScore: toAverage(sumScores.needs),
+    averageObjectionHandlingScore: toAverage(sumScores.objectionHandling),
+    averageBookingIntentScore: toAverage(sumScores.bookingIntent),
+    bookingReadyCount: transcripts.filter(
+      (transcript) => transcript.bookingIntentScore >= 4,
+    ).length,
+    objectionCounts: [...objectionCountsMap.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((left, right) => right.count - left.count)
+      .slice(0, 4),
+    repPerformance,
+    transcripts: transcripts.map((transcript) => {
+      const agentName = transcript.agentName?.trim();
+      return {
+        transcriptId: transcript.id,
+        contactId: transcript.contactId,
+        firstName: transcript.contact.firstName,
+        source: transcript.source as ConsultationTranscript["source"],
+        summary: transcript.summary,
+        overallScore: transcript.overallScore,
+        bookingIntentScore: transcript.bookingIntentScore,
+        nextStep: transcript.nextStep,
+        createdAt: transcript.createdAt.toISOString(),
+        ...(transcript.leadId ? { leadId: transcript.leadId } : {}),
+        ...(transcript.appointmentId ? { appointmentId: transcript.appointmentId } : {}),
+        ...(transcript.externalId ? { externalId: transcript.externalId } : {}),
+        ...(agentName ? { agentName } : {}),
+        ...(transcript.primaryObjection
+          ? { primaryObjection: transcript.primaryObjection }
+          : {}),
+        ...(transcript.appointment
+          ? { appointmentStartsAt: transcript.appointment.startsAt.toISOString() }
+          : {}),
+      } satisfies ConsultationTranscriptOverviewItem;
+    }),
+  };
+}
+
+export async function findConsultationTranscriptByExternalId(args: {
+  workspaceId: string;
+  source: ConsultationTranscript["source"];
+  externalId: string;
+}): Promise<ConsultationTranscript | null> {
+  const externalId = args.externalId.trim();
+  if (!externalId) {
+    return null;
+  }
+
+  const transcript = await prisma.consultationTranscript.findUnique({
+    where: {
+      workspaceId_source_externalId: {
+        workspaceId: args.workspaceId,
+        source: args.source,
+        externalId,
+      },
+    },
+  });
+
+  return transcript ? toConsultationTranscriptRecord(transcript) : null;
 }
 
 export async function importReactivationContacts(args: {
@@ -2960,6 +3725,93 @@ export async function recordOutboundMessage(args: {
       sentAt: deliveredDate,
       deliveredAt: deliveredDate,
     },
+  });
+}
+
+export async function recordOutboundMessageDelivery(args: {
+  queuedEventId: string;
+  workspaceId: string;
+  contactId: string;
+  channel: "sms" | "email";
+  provider: string;
+  destination: string;
+  body: string;
+  deliveredAt: string;
+  deliveredEvent: DomainEvent<MessageDeliveredPayload>;
+}) {
+  const deliveredDate = new Date(args.deliveredAt);
+
+  return prisma.$transaction(async (tx) => {
+    const conversation = await tx.conversation.upsert({
+      where: {
+        workspaceId_contactId_channel: {
+          workspaceId: args.workspaceId,
+          contactId: args.contactId,
+          channel: args.channel,
+        },
+      },
+      update: {},
+      create: {
+        workspaceId: args.workspaceId,
+        contactId: args.contactId,
+        channel: args.channel,
+      },
+    });
+
+    const message = await tx.message.upsert({
+      where: { queuedEventId: args.queuedEventId },
+      update: {
+        conversationId: conversation.id,
+        provider: args.provider,
+        destination: args.destination,
+        body: args.body,
+        status: "delivered",
+        sentAt: deliveredDate,
+        deliveredAt: deliveredDate,
+      },
+      create: {
+        workspaceId: args.workspaceId,
+        contactId: args.contactId,
+        conversationId: conversation.id,
+        queuedEventId: args.queuedEventId,
+        channel: args.channel,
+        direction: "outbound",
+        provider: args.provider,
+        destination: args.destination,
+        body: args.body,
+        status: "delivered",
+        sentAt: deliveredDate,
+        deliveredAt: deliveredDate,
+      },
+    });
+
+    const deliveredEvent = await tx.event.create({
+      data: {
+        id: args.deliveredEvent.id,
+        workspaceId: args.deliveredEvent.workspaceId,
+        name: args.deliveredEvent.name,
+        payload: args.deliveredEvent.payload as unknown as Prisma.InputJsonValue,
+        occurredAt: args.deliveredEvent.occurredAt,
+      },
+    });
+
+    await tx.outboundDeliveryAttempt.updateMany({
+      where: {
+        queuedEventId: args.queuedEventId,
+        status: "sending",
+      },
+      data: {
+        status: "delivered",
+        provider: args.provider,
+        deliveredAt: deliveredDate,
+        errorMessage: null,
+      },
+    });
+
+    return {
+      message,
+      deliveredEvent: toDomainEvent(deliveredEvent),
+    };
   });
 }
 

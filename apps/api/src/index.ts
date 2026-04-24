@@ -6,6 +6,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import { URL, pathToFileURL } from "node:url";
 
 import {
@@ -18,6 +19,7 @@ import {
   getReactivationOutcomeReport,
   getReviewReferralOutcomeReport,
   getRecentEvents,
+  getSalesEnablementReport,
   importReactivationContacts,
   markLeadQualified,
   markLeadResponded,
@@ -32,6 +34,7 @@ import {
 import {
   createAppointment,
   createMessageSuppressedEvent,
+  type ConsultationTranscriptSource,
   createLead,
   createMessageInboundReceivedEvent,
   type Appointment,
@@ -40,7 +43,7 @@ import {
   type MessageInboundReceivedPayload,
 } from "@one-system/domain";
 import type { InboundMessage } from "@one-system/messaging";
-import { appConfig } from "@one-system/config";
+import { appConfig, getOperatorApiKey } from "@one-system/config";
 import {
   executePaidAdsRun,
   previewPaidAdsRun,
@@ -57,7 +60,14 @@ import {
   triggerPostVisitReviewRequest,
 } from "@one-system/reviews-referrals";
 import {
+  ingestConsultationTranscript,
+  MAX_CONSULTATION_EXTERNAL_ID_LENGTH,
+  MAX_CONSULTATION_TRANSCRIPT_TEXT_LENGTH,
+  syncConsultationTranscripts,
+} from "@one-system/sales-enablement";
+import {
   parseTwilioInboundMessage,
+  type SalesConsultationTranscriptRecord,
   validateTwilioWebhookRequest,
 } from "@one-system/integrations";
 import {
@@ -130,6 +140,22 @@ interface PaidAdsSpendBody {
   currency?: string;
 }
 
+interface SalesEnablementTranscriptBody {
+  workspaceId?: string;
+  appointmentId?: string;
+  source?: string;
+  transcriptText?: string;
+  agentName?: string;
+}
+
+interface SalesEnablementSyncBody {
+  workspaceId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+  records?: unknown;
+}
+
 interface AppointmentRequestBody {
   workspaceId?: string;
   contactId?: string;
@@ -159,6 +185,39 @@ interface PaidAdsReportQuery {
   limit: number;
 }
 
+interface SalesEnablementReportQuery {
+  workspaceId: string;
+  limit: number;
+}
+
+interface SalesEnablementSyncInput {
+  workspaceId: string;
+  dateFrom: string;
+  dateTo: string;
+  limit: number;
+  records: SalesConsultationTranscriptRecord[];
+}
+
+function validateSalesTranscriptSource(
+  value: string | undefined,
+): ConsultationTranscriptSource {
+  const source = value?.trim().toLowerCase() || "manual";
+
+  if (
+    source === "manual" ||
+    source === "dev_capture" ||
+    source === "callrail" ||
+    source === "aircall" ||
+    source === "twilio_voice"
+  ) {
+    return source;
+  }
+
+  badRequest(
+    "`source` must be one of manual, dev_capture, callrail, aircall, or twilio_voice.",
+  );
+}
+
 const reactivationImportHeaders = [
   "firstName",
   "lastName",
@@ -169,6 +228,93 @@ const reactivationImportHeaders = [
 ] as const;
 
 const port = Number.parseInt(process.env.PORT ?? "4000", 10);
+const configuredMaxRequestBodyBytes = Number.parseInt(
+  process.env.MAX_REQUEST_BODY_BYTES ?? "1048576",
+  10,
+);
+const maxRequestBodyBytes =
+  Number.isFinite(configuredMaxRequestBodyBytes) &&
+  configuredMaxRequestBodyBytes > 0
+    ? configuredMaxRequestBodyBytes
+    : 1_048_576;
+
+class HttpError extends Error {
+  constructor(
+    readonly statusCode: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+function badRequest(message: string): never {
+  throw new HttpError(400, message);
+}
+
+function isDatabaseUnavailable(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  return code === "P1001" || error.message.includes("Can't reach database server");
+}
+
+function isKnownClientError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.trim();
+  return (
+    message === "`appointmentId` does not match an existing appointment." ||
+    message === "Twilio inbound webhook is missing `From`." ||
+    message === "Twilio inbound webhook is missing `Body`." ||
+    message === "Transcript already imported for this source/externalId." ||
+    message.startsWith("Campaign key must start with") ||
+    message.startsWith("Reactivation queue item") ||
+    message.startsWith("Queue item is not")
+  );
+}
+
+function getErrorResponse(error: unknown): {
+  statusCode: number;
+  payload: { error: string };
+} {
+  if (error instanceof HttpError) {
+    return {
+      statusCode: error.statusCode,
+      payload: { error: error.message },
+    };
+  }
+
+  if (error instanceof SyntaxError) {
+    return {
+      statusCode: 400,
+      payload: { error: "Request body must be valid JSON." },
+    };
+  }
+
+  if (isKnownClientError(error)) {
+    return {
+      statusCode: 400,
+      payload: { error: (error as Error).message },
+    };
+  }
+
+  if (isDatabaseUnavailable(error)) {
+    return {
+      statusCode: 503,
+      payload: { error: "Database unavailable. Retry after the database is reachable." },
+    };
+  }
+
+  console.error("[api] unexpected request error", error);
+  return {
+    statusCode: 500,
+    payload: { error: "Unexpected server error." },
+  };
+}
 
 function sendJson(response: ServerResponse, statusCode: number, payload: unknown) {
   response.writeHead(statusCode, {
@@ -189,8 +335,20 @@ async function readJsonBody<T>(request: IncomingMessage): Promise<T> {
 
 async function readTextBody(request: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
+  let receivedBytes = 0;
+
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    receivedBytes += buffer.byteLength;
+
+    if (receivedBytes > maxRequestBodyBytes) {
+      throw new HttpError(
+        413,
+        `Request body exceeds the ${maxRequestBodyBytes} byte limit.`,
+      );
+    }
+
+    chunks.push(buffer);
   }
 
   if (chunks.length === 0) {
@@ -211,6 +369,83 @@ function getHeaderValue(
   }
 
   return value;
+}
+
+function getBearerToken(value: string | undefined): string | undefined {
+  const prefix = "Bearer ";
+  if (!value?.startsWith(prefix)) {
+    return undefined;
+  }
+
+  return value.slice(prefix.length).trim();
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  return (
+    leftBuffer.length === rightBuffer.length &&
+    timingSafeEqual(leftBuffer, rightBuffer)
+  );
+}
+
+function isProtectedApiRequest(method: string | undefined, pathname: string) {
+  if (method === "GET" && pathname === "/health") {
+    return false;
+  }
+
+  if (method === "POST" && pathname === "/webhooks/twilio/messages") {
+    return false;
+  }
+
+  if (method === "GET") {
+    return [
+      "/events",
+      "/delivery-status",
+      "/reactivation/report",
+      "/reviews-referrals/report",
+      "/paid-ads/report",
+      "/sales-enablement/report",
+      "/reactivation/readiness",
+      "/reviews-referrals/readiness",
+      "/paid-ads/readiness",
+    ].includes(pathname);
+  }
+
+  return method === "POST";
+}
+
+function assertAuthorizedApiRequest(
+  request: IncomingMessage,
+  requestUrl: URL,
+) {
+  if (!isProtectedApiRequest(request.method, requestUrl.pathname)) {
+    return;
+  }
+
+  const configuredApiKey = getOperatorApiKey()?.trim();
+  if (!configuredApiKey) {
+    if (process.env.NODE_ENV === "production") {
+      throw new HttpError(
+        503,
+        "Operator API auth is not configured. Set ONE_SYSTEM_API_KEY before enabling protected routes.",
+      );
+    }
+
+    return;
+  }
+
+  const providedApiKey =
+    getBearerToken(getHeaderValue(request, "authorization")) ||
+    getHeaderValue(request, "x-one-system-api-key")?.trim();
+
+  if (
+    !providedApiKey ||
+    !constantTimeEqual(providedApiKey, configuredApiKey)
+  ) {
+    throw new HttpError(401, "Missing or invalid operator API credentials.");
+  }
 }
 
 function getRequestBaseUrl(request: IncomingMessage): string {
@@ -253,15 +488,15 @@ function validateLeadInput(body: LeadRequestBody): CreateLeadInput {
   };
 
   if (!source) {
-    throw new Error("`source` is required.");
+    badRequest("`source` is required.");
   }
 
   if (!firstName) {
-    throw new Error("`firstName` is required.");
+    badRequest("`firstName` is required.");
   }
 
   if (!email && !phone) {
-    throw new Error("At least one of `email` or `phone` is required.");
+    badRequest("At least one of `email` or `phone` is required.");
   }
 
   return {
@@ -283,15 +518,15 @@ function validateInboundMessageInput(body: InboundMessageBody) {
   const provider = body.provider?.trim() || "dev-log";
 
   if (!channel) {
-    throw new Error("`channel` is required.");
+    badRequest("`channel` is required.");
   }
 
   if (!from) {
-    throw new Error("`from` is required.");
+    badRequest("`from` is required.");
   }
 
   if (!messageBody) {
-    throw new Error("`body` is required.");
+    badRequest("`body` is required.");
   }
 
   return {
@@ -315,7 +550,7 @@ function validateReactivationAudienceSegment(
     return value;
   }
 
-  throw new Error("`audienceSegment` must be one of all, stale_leads, or past_customers.");
+  badRequest("`audienceSegment` must be one of all, stale_leads, or past_customers.");
 }
 
 function validateReactivationRunInput(body: ReactivationRunBody) {
@@ -393,7 +628,7 @@ function validateReviewsReferralsResponseDraftInput(
   const customerMessage = body.customerMessage?.trim();
 
   if (!customerMessage) {
-    throw new Error("`customerMessage` is required.");
+    badRequest("`customerMessage` is required.");
   }
 
   return {
@@ -454,7 +689,7 @@ function parseCsvRows(input: string): string[][] {
   }
 
   if (inQuotes) {
-    throw new Error("CSV contains an unterminated quoted field.");
+    badRequest("CSV contains an unterminated quoted field.");
   }
 
   return rows;
@@ -467,7 +702,7 @@ function parseReactivationImportCsv(input: string): {
   const [headerRow, ...dataRows] = parseCsvRows(input);
 
   if (!headerRow) {
-    throw new Error("CSV import requires a header row.");
+    badRequest("CSV import requires a header row.");
   }
 
   const headerIndexes = new Map(headerRow.map((header, index) => [header, index]));
@@ -476,7 +711,7 @@ function parseReactivationImportCsv(input: string): {
   );
 
   if (missingHeaders.length > 0) {
-    throw new Error(`CSV import is missing headers: ${missingHeaders.join(", ")}.`);
+    badRequest(`CSV import is missing headers: ${missingHeaders.join(", ")}.`);
   }
 
   const rows: ReactivationImportRow[] = [];
@@ -624,18 +859,22 @@ function validateAppointmentInput(body: AppointmentRequestBody) {
   const outcome = body.outcome;
 
   if (!contactId) {
-    throw new Error("`contactId` is required.");
+    badRequest("`contactId` is required.");
   }
 
   if (!startsAt) {
-    throw new Error("`startsAt` is required.");
+    badRequest("`startsAt` is required.");
+  }
+
+  if (Number.isNaN(new Date(startsAt).getTime())) {
+    badRequest("`startsAt` must be a valid ISO datetime.");
   }
 
   if (
     outcome &&
     !["scheduled", "completed", "cancelled", "no_show"].includes(outcome)
   ) {
-    throw new Error("`outcome` must be one of scheduled, completed, cancelled, or no_show.");
+    badRequest("`outcome` must be one of scheduled, completed, cancelled, or no_show.");
   }
 
   return {
@@ -709,26 +948,178 @@ function validatePaidAdsReportQuery(requestUrl: URL): PaidAdsReportQuery {
 function validatePaidAdsSpendInput(body: PaidAdsSpendBody) {
   const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
   const reportDate = body.reportDate?.trim() || new Date().toISOString();
+  const parsedReportDate = new Date(reportDate);
   const source = body.source?.trim();
   const amount = Number(body.amount);
-  const currency = body.currency?.trim() || "USD";
+  const currency = (body.currency?.trim() || "USD").toUpperCase();
 
   if (!source) {
-    throw new Error("`source` is required.");
+    badRequest("`source` is required.");
   }
 
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error("`amount` must be a positive number.");
+    badRequest("`amount` must be a positive number.");
+  }
+
+  if (Number.isNaN(parsedReportDate.getTime())) {
+    badRequest("`reportDate` must be a valid ISO date.");
+  }
+
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    badRequest("`currency` must be a 3-letter ISO code.");
   }
 
   return {
     workspaceId,
-    reportDate,
+    reportDate: parsedReportDate.toISOString(),
     source,
     ...(body.utmSource?.trim() ? { utmSource: body.utmSource.trim() } : {}),
     ...(body.utmCampaign?.trim() ? { utmCampaign: body.utmCampaign.trim() } : {}),
     amount,
     currency,
+  };
+}
+
+function validateSalesEnablementTranscriptInput(
+  body: SalesEnablementTranscriptBody,
+) {
+  const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
+  const appointmentId = body.appointmentId?.trim();
+  const source = validateSalesTranscriptSource(body.source);
+  const transcriptText = body.transcriptText?.trim();
+  const agentName = body.agentName?.trim();
+
+  if (!appointmentId) {
+    badRequest("`appointmentId` is required.");
+  }
+
+  if (!transcriptText) {
+    badRequest("`transcriptText` is required.");
+  }
+
+  if (transcriptText.length > MAX_CONSULTATION_TRANSCRIPT_TEXT_LENGTH) {
+    badRequest(
+      `\`transcriptText\` must be ${MAX_CONSULTATION_TRANSCRIPT_TEXT_LENGTH} characters or fewer.`,
+    );
+  }
+
+  return {
+    workspaceId,
+    appointmentId,
+    source,
+    transcriptText,
+    ...(agentName ? { agentName: agentName.slice(0, 80) } : {}),
+  };
+}
+
+function validateSalesEnablementReportQuery(
+  requestUrl: URL,
+): SalesEnablementReportQuery {
+  const workspaceId =
+    requestUrl.searchParams.get("workspaceId")?.trim() || "workspace_medspa_demo";
+  const limitParam = requestUrl.searchParams.get("limit");
+  const parsedLimit = limitParam ? Number.parseInt(limitParam, 10) : Number.NaN;
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.max(1, Math.min(100, parsedLimit))
+    : 25;
+
+  return {
+    workspaceId,
+    limit,
+  };
+}
+
+function validateSalesEnablementSyncInput(
+  body: SalesEnablementSyncBody,
+): SalesEnablementSyncInput {
+  const workspaceId = body.workspaceId?.trim() || "workspace_medspa_demo";
+  const now = new Date();
+  const defaultDateFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const dateFrom = body.dateFrom?.trim()
+    ? new Date(body.dateFrom)
+    : defaultDateFrom;
+  const dateTo = body.dateTo?.trim() ? new Date(body.dateTo) : now;
+  const limit = Number.isFinite(body.limit)
+    ? Math.max(1, Math.min(250, Math.floor(body.limit as number)))
+    : 100;
+
+  if (Number.isNaN(dateFrom.getTime()) || Number.isNaN(dateTo.getTime())) {
+    badRequest("`dateFrom` and `dateTo` must be valid ISO datetimes.");
+  }
+
+  if (dateFrom > dateTo) {
+    badRequest("`dateFrom` cannot be after `dateTo`.");
+  }
+
+  if (!Array.isArray(body.records) || body.records.length === 0) {
+    badRequest("`records` must be a non-empty array.");
+  }
+
+  const records = body.records.map((record, index) => {
+    if (!record || typeof record !== "object") {
+      badRequest(`records[${index}] must be an object.`);
+    }
+
+    const payload = record as Record<string, unknown>;
+    const externalId = String(payload.externalId ?? "").trim();
+    const occurredAt = new Date(String(payload.occurredAt ?? "").trim());
+    const transcriptText = String(payload.transcriptText ?? "").trim();
+    const sourceProvider = validateSalesTranscriptSource(
+      typeof payload.sourceProvider === "string"
+        ? payload.sourceProvider
+        : undefined,
+    );
+    const appointmentExternalId = String(
+      payload.appointmentExternalId ?? payload.appointmentId ?? "",
+    ).trim();
+    const agentName = String(payload.agentName ?? "").trim();
+
+    if (!externalId) {
+      badRequest(`records[${index}].externalId is required.`);
+    }
+
+    if (externalId.length > MAX_CONSULTATION_EXTERNAL_ID_LENGTH) {
+      badRequest(
+        `records[${index}].externalId must be ${MAX_CONSULTATION_EXTERNAL_ID_LENGTH} characters or fewer.`,
+      );
+    }
+
+    if (Number.isNaN(occurredAt.getTime())) {
+      badRequest(`records[${index}].occurredAt must be a valid datetime.`);
+    }
+
+    if (!transcriptText) {
+      badRequest(`records[${index}].transcriptText is required.`);
+    }
+
+    if (transcriptText.length > MAX_CONSULTATION_TRANSCRIPT_TEXT_LENGTH) {
+      badRequest(
+        `records[${index}].transcriptText must be ${MAX_CONSULTATION_TRANSCRIPT_TEXT_LENGTH} characters or fewer.`,
+      );
+    }
+
+    return {
+      externalId,
+      occurredAt: occurredAt.toISOString(),
+      transcriptText,
+      sourceProvider,
+      ...(appointmentExternalId ? { appointmentExternalId } : {}),
+      ...(payload.contactExternalId
+        ? { contactExternalId: String(payload.contactExternalId).trim() }
+        : {}),
+      ...(payload.leadExternalId
+        ? { leadExternalId: String(payload.leadExternalId).trim() }
+        : {}),
+      ...(agentName ? { agentName: agentName.slice(0, 80) } : {}),
+    } satisfies SalesConsultationTranscriptRecord;
+  });
+
+  return {
+    workspaceId,
+    dateFrom: dateFrom.toISOString(),
+    dateTo: dateTo.toISOString(),
+    limit,
+    records,
   };
 }
 
@@ -866,6 +1257,7 @@ export function createApiServer(): Server {
         request.url ?? "/",
         `http://${request.headers.host ?? "localhost"}`,
       );
+      assertAuthorizedApiRequest(request, requestUrl);
 
       if (request.method === "GET" && requestUrl.pathname === "/health") {
         sendJson(response, 200, { ok: true, service: "api" });
@@ -904,6 +1296,16 @@ export function createApiServer(): Server {
     if (request.method === "GET" && requestUrl.pathname === "/paid-ads/report") {
       const query = validatePaidAdsReportQuery(requestUrl);
       const report = await getPaidAdsOutcomeReport(query);
+      sendJson(response, 200, report);
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/sales-enablement/report"
+    ) {
+      const query = validateSalesEnablementReportQuery(requestUrl);
+      const report = await getSalesEnablementReport(query);
       sendJson(response, 200, report);
       return;
     }
@@ -1060,6 +1462,28 @@ export function createApiServer(): Server {
 
     if (
       request.method === "POST" &&
+      requestUrl.pathname === "/sales-enablement/transcripts"
+    ) {
+      const body = await readJsonBody<SalesEnablementTranscriptBody>(request);
+      const input = validateSalesEnablementTranscriptInput(body);
+      const result = await ingestConsultationTranscript(input);
+      sendJson(response, 201, result);
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      requestUrl.pathname === "/sales-enablement/sync"
+    ) {
+      const body = await readJsonBody<SalesEnablementSyncBody>(request);
+      const input = validateSalesEnablementSyncInput(body);
+      const result = await syncConsultationTranscripts(input);
+      sendJson(response, 201, result);
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
       requestUrl.pathname === "/reviews-referrals/response-draft"
     ) {
       const body = await readJsonBody<ReviewsReferralsResponseDraftBody>(request);
@@ -1103,9 +1527,8 @@ export function createApiServer(): Server {
 
       sendJson(response, 404, { error: "Not found." });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unexpected server error.";
-      sendJson(response, 400, { error: message });
+      const errorResponse = getErrorResponse(error);
+      sendJson(response, errorResponse.statusCode, errorResponse.payload);
     }
   });
 }

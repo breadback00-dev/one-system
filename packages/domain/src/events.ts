@@ -6,6 +6,9 @@ export type DomainEventName =
   | "reactivation.import_completed"
   | "reactivation.follow_up_handled"
   | "reviews_referrals.referral_source_captured"
+  | "sales_enablement.transcript_received"
+  | "sales_enablement.analysis_completed"
+  | "sales_enablement.score_recorded"
   | "message.inbound_received"
   | "message.outbound_queued"
   | "message.suppressed"
@@ -91,6 +94,39 @@ export interface ReviewReferralSourceCapturedPayload {
   captureConfidence?: "high" | "medium" | "low";
   campaignKey?: string;
   runId?: string;
+}
+
+export interface SalesTranscriptReceivedPayload {
+  transcriptId: string;
+  contactId: string;
+  leadId?: string;
+  appointmentId?: string;
+  externalId?: string;
+  agentName?: string;
+  source: string;
+  transcriptLength: number;
+  receivedAt: string;
+}
+
+export interface SalesAnalysisCompletedPayload {
+  transcriptId: string;
+  contactId: string;
+  promptKey: string;
+  summary: string;
+  nextStep: string;
+  primaryObjection?: string;
+  completedAt: string;
+}
+
+export interface SalesScoreRecordedPayload {
+  transcriptId: string;
+  contactId: string;
+  overallScore: number;
+  rapportScore: number;
+  needsScore: number;
+  objectionHandlingScore: number;
+  bookingIntentScore: number;
+  scoredAt: string;
 }
 
 export interface MessageOutboundQueuedPayload {

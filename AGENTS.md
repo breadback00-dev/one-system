@@ -59,10 +59,17 @@ Unified AI customer acquisition platform for med spas first, built to support fi
 - Do not treat analytics as an afterthought; event design starts at foundation time.
 
 ## Read When Needed
-- Start of each session: `memory/one_system_SUMMARY.md`
+- Start of each session: `memory/one_system_HANDOFF.md`
+- Then read: `memory/one_system_SUMMARY.md`
 - Module execution plans: `docs/module-plans.md`
+- Handoff standard: `docs/context-handoff.md`
 - Product direction: `docs/product-spec.md`
 - Build sequence: `docs/roadmap.md`
 - System design: `docs/architecture.md`
 - Working assumptions and invariants: `docs/project_manual.md`
 - Niche specifics: `docs/niche/medspa.md`
+
+## Context Handoff
+- At the end of each context window or major checkpoint, update `memory/one_system_HANDOFF.md`.
+- Keep handoffs compact and current; do not duplicate long project history there.
+- New threads should resume from the official read order in `docs/context-handoff.md`.

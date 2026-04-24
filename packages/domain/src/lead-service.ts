@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type {
   CreateLeadInput,
   Contact,
+  ConsultationScorecard,
   Lead,
   LeadAttribution,
 } from "./entities";
@@ -19,6 +20,9 @@ import type {
   ReviewReferralSourceCapturedPayload,
   ReactivationImportCompletedPayload,
   ReactivationFollowUpHandledPayload,
+  SalesAnalysisCompletedPayload,
+  SalesScoreRecordedPayload,
+  SalesTranscriptReceivedPayload,
 } from "./events";
 import type { Appointment } from "./entities";
 
@@ -202,18 +206,21 @@ export function createMessageDeliveredEvent(args: {
   contactId: string;
   channel: "sms" | "email";
   provider: string;
+  deliveredAt?: string;
 }): DomainEvent<MessageDeliveredPayload> {
+  const deliveredAt = args.deliveredAt ?? new Date().toISOString();
+
   return {
     id: randomUUID(),
     workspaceId: args.workspaceId,
     name: "message.delivered",
-    occurredAt: new Date(),
+    occurredAt: new Date(deliveredAt),
     payload: {
       queuedEventId: args.queuedEventId,
       contactId: args.contactId,
       channel: args.channel,
       provider: args.provider,
-      deliveredAt: new Date().toISOString(),
+      deliveredAt,
     },
   };
 }
@@ -326,6 +333,95 @@ export function createReviewReferralSourceCapturedEvent(args: {
         : {}),
       ...(args.campaignKey ? { campaignKey: args.campaignKey } : {}),
       ...(args.runId ? { runId: args.runId } : {}),
+    },
+  };
+}
+
+export function createSalesTranscriptReceivedEvent(args: {
+  workspaceId: string;
+  transcriptId: string;
+  contactId: string;
+  leadId?: string;
+  appointmentId?: string;
+  externalId?: string;
+  agentName?: string;
+  source: string;
+  transcriptText: string;
+  receivedAt?: string;
+}): DomainEvent<SalesTranscriptReceivedPayload> {
+  const occurredAt = new Date(args.receivedAt ?? new Date().toISOString());
+
+  return {
+    id: randomUUID(),
+    workspaceId: args.workspaceId,
+    name: "sales_enablement.transcript_received",
+    occurredAt,
+    payload: {
+      transcriptId: args.transcriptId,
+      contactId: args.contactId,
+      source: args.source,
+      transcriptLength: args.transcriptText.trim().length,
+      receivedAt: occurredAt.toISOString(),
+      ...(args.leadId ? { leadId: args.leadId } : {}),
+      ...(args.appointmentId ? { appointmentId: args.appointmentId } : {}),
+      ...(args.externalId ? { externalId: args.externalId } : {}),
+      ...(args.agentName ? { agentName: args.agentName } : {}),
+    },
+  };
+}
+
+export function createSalesAnalysisCompletedEvent(args: {
+  workspaceId: string;
+  transcriptId: string;
+  contactId: string;
+  promptKey: string;
+  summary: string;
+  nextStep: string;
+  primaryObjection?: string;
+  completedAt?: string;
+}): DomainEvent<SalesAnalysisCompletedPayload> {
+  const occurredAt = new Date(args.completedAt ?? new Date().toISOString());
+
+  return {
+    id: randomUUID(),
+    workspaceId: args.workspaceId,
+    name: "sales_enablement.analysis_completed",
+    occurredAt,
+    payload: {
+      transcriptId: args.transcriptId,
+      contactId: args.contactId,
+      promptKey: args.promptKey,
+      summary: args.summary,
+      nextStep: args.nextStep,
+      completedAt: occurredAt.toISOString(),
+      ...(args.primaryObjection ? { primaryObjection: args.primaryObjection } : {}),
+    },
+  };
+}
+
+export function createSalesScoreRecordedEvent(args: {
+  workspaceId: string;
+  transcriptId: string;
+  contactId: string;
+  scorecard: ConsultationScorecard;
+  scoredAt?: string;
+}): DomainEvent<SalesScoreRecordedPayload> {
+  const occurredAt = new Date(args.scoredAt ?? new Date().toISOString());
+
+  return {
+    id: randomUUID(),
+    workspaceId: args.workspaceId,
+    name: "sales_enablement.score_recorded",
+    occurredAt,
+    payload: {
+      transcriptId: args.transcriptId,
+      contactId: args.contactId,
+      overallScore: args.scorecard.overallScore,
+      rapportScore: args.scorecard.rapportScore,
+      needsScore: args.scorecard.needsScore,
+      objectionHandlingScore: args.scorecard.objectionHandlingScore,
+      bookingIntentScore: args.scorecard.bookingIntentScore,
+      scoredAt: occurredAt.toISOString(),
     },
   };
 }

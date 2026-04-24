@@ -6,7 +6,7 @@
     "dev": "dotenv -e ../../.env -- next dev",
     "build": "dotenv -e ../../.env -- next build",
     "start": "dotenv -e ../../.env -- next start",
-    "test": "tsx app/reactivation-feedback.test.ts",
+    "test": "tsx app/reactivation-feedback.test.ts && tsx app/sales-enablement-feedback.test.ts",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "format": "echo dashboard format step TBD"
@@ -16,6 +16,7 @@
     "@one-system/paid-ads": "0.1.0",
     "@one-system/reactivation": "0.1.0",
     "@one-system/reviews-referrals": "0.1.0",
+    "@one-system/sales-enablement": "0.1.0",
     "@one-system/ui": "0.1.0",
     "next": "^15.5.4",
     "react": "^19.1.1",

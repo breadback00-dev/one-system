@@ -33,6 +33,7 @@ export interface MessageDeliveryResult {
 }
 
 export interface MessageGateway {
+  provider: string;
   send(message: QueuedMessage): Promise<MessageDeliveryResult>;
 }
 

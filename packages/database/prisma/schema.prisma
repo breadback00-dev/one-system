@@ -8,35 +8,39 @@ datasource db {
 }
 
 model Workspace {
-  id            String         @id @default(cuid())
-  name          String
-  niche         String
-  timezone      String
-  contacts      Contact[]
-  leads         Lead[]
-  adSpendEntries AdSpendEntry[]
-  events        Event[]
-  conversations Conversation[]
-  appointments  Appointment[]
-  messages      Message[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                     String                  @id @default(cuid())
+  name                   String
+  niche                  String
+  timezone               String
+  contacts               Contact[]
+  leads                  Lead[]
+  adSpendEntries         AdSpendEntry[]
+  events                 Event[]
+  conversations          Conversation[]
+  appointments           Appointment[]
+  messages               Message[]
+  outboundDeliveryAttempts OutboundDeliveryAttempt[]
+  consultationTranscripts ConsultationTranscript[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 }
 
 model Contact {
-  id            String         @id @default(cuid())
-  workspaceId   String
-  firstName     String
-  lastName      String?
-  email         String?
-  phone         String?
-  conversations Conversation[]
-  appointments  Appointment[]
-  leads         Lead[]
-  messages      Message[]
-  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                     String                  @id @default(cuid())
+  workspaceId            String
+  firstName              String
+  lastName               String?
+  email                  String?
+  phone                  String?
+  conversations          Conversation[]
+  appointments           Appointment[]
+  leads                  Lead[]
+  messages               Message[]
+  outboundDeliveryAttempts OutboundDeliveryAttempt[]
+  consultationTranscripts ConsultationTranscript[]
+  workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@index([workspaceId])
   @@unique([workspaceId, email])
@@ -44,22 +48,23 @@ model Contact {
 }
 
 model Lead {
-  id          String       @id @default(cuid())
-  workspaceId String
-  contactId   String
-  source      String
-  status      String
-  campaignId  String?
-  utmSource   String?
-  utmMedium   String?
-  utmCampaign String?
-  utmTerm     String?
-  utmContent  String?
-  contact     Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  appointments Appointment[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                     String                  @id @default(cuid())
+  workspaceId            String
+  contactId              String
+  source                 String
+  status                 String
+  campaignId             String?
+  utmSource              String?
+  utmMedium              String?
+  utmCampaign            String?
+  utmTerm                String?
+  utmContent             String?
+  contact                Contact                 @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  appointments           Appointment[]
+  consultationTranscripts ConsultationTranscript[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@index([workspaceId, status])
   @@index([workspaceId, source, utmCampaign])
@@ -98,19 +103,52 @@ model Conversation {
 }
 
 model Appointment {
-  id          String    @id @default(cuid())
-  workspaceId String
-  contactId   String
-  leadId      String?
-  startsAt    DateTime
-  outcome     String?
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  lead        Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                     String                  @id @default(cuid())
+  workspaceId            String
+  contactId              String
+  leadId                 String?
+  startsAt               DateTime
+  outcome                String?
+  workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact                Contact                 @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead                   Lead?                   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  consultationTranscripts ConsultationTranscript[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@index([workspaceId, startsAt])
+}
+
+model ConsultationTranscript {
+  id                     String    @id @default(cuid())
+  workspaceId            String
+  contactId              String
+  leadId                 String?
+  appointmentId          String?
+  externalId             String?
+  agentName              String?
+  source                 String
+  transcriptText         String
+  summary                String
+  promptKey              String
+  overallScore           Int
+  rapportScore           Int
+  needsScore             Int
+  objectionHandlingScore Int
+  bookingIntentScore     Int
+  primaryObjection       String?
+  nextStep               String
+  workspace              Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact                Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead                   Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  appointment            Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([workspaceId, createdAt])
+  @@index([contactId, createdAt])
+  @@index([appointmentId])
+  @@unique([workspaceId, source, externalId])
 }
 
 model Event {
@@ -147,4 +185,27 @@ model Message {
 
   @@index([workspaceId, createdAt])
   @@index([contactId, createdAt])
+}
+
+model OutboundDeliveryAttempt {
+  id            String    @id @default(cuid())
+  queuedEventId String    @unique
+  workspaceId   String
+  contactId     String
+  channel       String
+  destination   String
+  status        String
+  provider      String?
+  attemptCount  Int       @default(1)
+  claimedAt     DateTime  @default(now())
+  deliveredAt   DateTime?
+  failedAt      DateTime?
+  errorMessage  String?
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact       Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([workspaceId, status, claimedAt])
+  @@index([contactId, claimedAt])
 }

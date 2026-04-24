@@ -60,6 +60,39 @@ export interface Appointment {
   outcome?: "scheduled" | "completed" | "cancelled" | "no_show";
 }
 
+export type ConsultationTranscriptSource =
+  | "manual"
+  | "dev_capture"
+  | "callrail"
+  | "aircall"
+  | "twilio_voice";
+
+export interface ConsultationScorecard {
+  overallScore: number;
+  rapportScore: number;
+  needsScore: number;
+  objectionHandlingScore: number;
+  bookingIntentScore: number;
+  primaryObjection?: string;
+  nextStep: string;
+}
+
+export interface ConsultationTranscript {
+  id: string;
+  workspaceId: string;
+  contactId: string;
+  leadId?: string;
+  appointmentId?: string;
+  externalId?: string;
+  agentName?: string;
+  source: ConsultationTranscriptSource;
+  transcriptText: string;
+  summary: string;
+  promptKey: string;
+  scorecard: ConsultationScorecard;
+  createdAt: Date;
+}
+
 export interface CreateLeadInput {
   workspaceId: string;
   source: string;

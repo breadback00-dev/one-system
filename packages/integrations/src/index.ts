@@ -62,6 +62,13 @@ export interface CrmDormantContactSyncAdapter {
 
 export type PaidAdsProvider = "meta" | "google_ads" | "tiktok_ads" | "manual";
 
+export type SalesConsultationProvider =
+  | "manual"
+  | "dev_capture"
+  | "callrail"
+  | "aircall"
+  | "twilio_voice";
+
 export interface PaidAdsPerformanceRecord {
   source: string;
   reportDate: string;
@@ -88,6 +95,69 @@ export interface PaidAdsPerformanceSyncAdapter {
     dateTo: string;
     limit?: number;
   }): Promise<PaidAdsSyncResult>;
+}
+
+export interface SalesConsultationTranscriptRecord {
+  externalId: string;
+  occurredAt: string;
+  transcriptText: string;
+  sourceProvider: SalesConsultationProvider;
+  appointmentExternalId?: string;
+  contactExternalId?: string;
+  leadExternalId?: string;
+  agentName?: string;
+}
+
+export interface SalesConsultationTranscriptSyncResult {
+  provider: SalesConsultationProvider;
+  workspaceId: string;
+  records: SalesConsultationTranscriptRecord[];
+}
+
+export interface SalesConsultationTranscriptSyncAdapter {
+  readonly provider: SalesConsultationProvider;
+  syncConsultationTranscripts(args: {
+    workspaceId: string;
+    dateFrom: string;
+    dateTo: string;
+    limit?: number;
+  }): Promise<SalesConsultationTranscriptSyncResult>;
+}
+
+export class StaticSalesConsultationTranscriptSyncAdapter
+  implements SalesConsultationTranscriptSyncAdapter
+{
+  readonly provider = "dev_capture";
+
+  constructor(
+    private readonly records: SalesConsultationTranscriptRecord[],
+  ) {}
+
+  async syncConsultationTranscripts(args: {
+    workspaceId: string;
+    dateFrom: string;
+    dateTo: string;
+    limit?: number;
+  }): Promise<SalesConsultationTranscriptSyncResult> {
+    const dateFrom = new Date(args.dateFrom);
+    const dateTo = new Date(args.dateTo);
+    const records = this.records
+      .filter((record) => {
+        const occurredAt = new Date(record.occurredAt);
+        return (
+          record.sourceProvider === this.provider &&
+          occurredAt >= dateFrom &&
+          occurredAt <= dateTo
+        );
+      })
+      .slice(0, args.limit ?? 100);
+
+    return {
+      provider: this.provider,
+      workspaceId: args.workspaceId,
+      records,
+    };
+  }
 }
 
 export interface TwilioInboundWebhookPayload {

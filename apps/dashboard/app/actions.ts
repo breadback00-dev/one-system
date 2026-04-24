@@ -19,6 +19,11 @@ import {
   createReviewResponseDraft,
   executeReviewsReferralsRun,
 } from "@one-system/reviews-referrals";
+import {
+  ingestConsultationTranscript,
+  syncConsultationTranscripts,
+} from "@one-system/sales-enablement";
+import { assertDashboardMutationAllowed } from "@one-system/config";
 
 const DASHBOARD_PATH = "/";
 
@@ -47,6 +52,8 @@ function formatFeedbackMessage(error: unknown, fallback: string): string {
 }
 
 export async function markReactivationItemHandled(formData: FormData) {
+  assertDashboardMutationAllowed();
+
   const queuedEventId = String(formData.get("queuedEventId") ?? "").trim();
   const contactId = String(formData.get("contactId") ?? "").trim();
   const rawNote = String(formData.get("note") ?? "").trim();
@@ -99,6 +106,8 @@ export async function markReactivationItemHandled(formData: FormData) {
 }
 
 export async function bookReactivationItemAtSlot(formData: FormData) {
+  assertDashboardMutationAllowed();
+
   const queuedEventId = String(formData.get("queuedEventId") ?? "").trim();
   const contactId = String(formData.get("contactId") ?? "").trim();
   const startsAtInput = String(formData.get("startsAt") ?? "").trim();
@@ -195,6 +204,8 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
 }
 
 export async function runReactivationCampaign(formData: FormData) {
+  assertDashboardMutationAllowed();
+
   const campaignKey =
     String(formData.get("campaignKey") ?? "").trim() || "reactivation-default";
   const inactiveDays = Number.parseInt(
@@ -259,6 +270,8 @@ export async function runReactivationCampaign(formData: FormData) {
 }
 
 export async function runReviewsReferralsCampaign(formData: FormData) {
+  assertDashboardMutationAllowed();
+
   const campaignKey =
     String(formData.get("campaignKey") ?? "").trim() ||
     "reviews-referrals-default";
@@ -316,6 +329,8 @@ export async function runReviewsReferralsCampaign(formData: FormData) {
 }
 
 export async function runPaidAdsCampaign(formData: FormData) {
+  assertDashboardMutationAllowed();
+
   const campaignKey =
     String(formData.get("campaignKey") ?? "").trim() || "paid-ads-default";
   const limit = Number.parseInt(String(formData.get("limit") ?? "25"), 10);
@@ -372,6 +387,8 @@ export async function runPaidAdsCampaign(formData: FormData) {
 }
 
 export async function recordPaidAdsSpendEntry(formData: FormData) {
+  assertDashboardMutationAllowed();
+
   const source = String(formData.get("source") ?? "").trim();
   const utmSource = String(formData.get("utmSource") ?? "").trim();
   const utmCampaign = String(formData.get("utmCampaign") ?? "").trim();
@@ -414,6 +431,8 @@ export async function recordPaidAdsSpendEntry(formData: FormData) {
 }
 
 export async function generateReviewsResponseDraft(formData: FormData) {
+  assertDashboardMutationAllowed();
+
   const customerMessage = String(formData.get("customerMessage") ?? "").trim();
   const customerFirstName = String(formData.get("customerFirstName") ?? "").trim();
 
@@ -447,4 +466,101 @@ export async function generateReviewsResponseDraft(formData: FormData) {
     reviewsDraftText: result.draft.slice(0, 600),
   });
   redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+}
+
+export async function ingestSalesConsultationTranscript(formData: FormData) {
+  assertDashboardMutationAllowed();
+
+  const appointmentId = String(formData.get("appointmentId") ?? "").trim();
+  const source = String(formData.get("source") ?? "").trim() || "manual";
+  const transcriptText = String(formData.get("transcriptText") ?? "").trim();
+  const agentName = String(formData.get("agentName") ?? "").trim();
+
+  try {
+    const result = await ingestConsultationTranscript({
+      workspaceId: "workspace_medspa_demo",
+      appointmentId,
+      source: source as
+        | "manual"
+        | "dev_capture"
+        | "callrail"
+        | "aircall"
+        | "twilio_voice",
+      transcriptText,
+      ...(agentName ? { agentName } : {}),
+    });
+    revalidatePath(DASHBOARD_PATH);
+    const params = new URLSearchParams({
+      salesEnablement: "captured",
+      salesTranscriptId: result.transcript.id,
+      salesAppointmentId: result.context.appointmentId,
+      salesFirstName: result.context.contactFirstName,
+      salesOverallScore: String(result.transcript.scorecard.overallScore),
+      ...(agentName ? { salesAgentName: agentName } : {}),
+      ...(result.transcript.scorecard.primaryObjection
+        ? { salesPrimaryObjection: result.transcript.scorecard.primaryObjection }
+        : {}),
+    });
+    redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+  } catch (error) {
+    revalidatePath(DASHBOARD_PATH);
+    const params = new URLSearchParams({
+      salesEnablement: "error",
+      salesEnablementMessage: formatFeedbackMessage(
+        error,
+        "Unable to ingest this consultation transcript.",
+      ),
+    });
+    redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+  }
+}
+
+export async function runSalesEnablementAdapterSync(formData: FormData) {
+  assertDashboardMutationAllowed();
+
+  const appointmentId = String(formData.get("appointmentId") ?? "").trim();
+  const transcriptText = String(formData.get("transcriptText") ?? "").trim();
+  const agentName = String(formData.get("agentName") ?? "").trim();
+  const now = new Date();
+  const dateFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const externalId = `dashboard-sync-${Date.now()}`;
+
+  try {
+    const result = await syncConsultationTranscripts({
+      workspaceId: "workspace_medspa_demo",
+      dateFrom: dateFrom.toISOString(),
+      dateTo: now.toISOString(),
+      limit: 25,
+      records: [
+        {
+          externalId,
+          occurredAt: now.toISOString(),
+          sourceProvider: "dev_capture",
+          appointmentExternalId: appointmentId,
+          transcriptText,
+          ...(agentName ? { agentName } : {}),
+        },
+      ],
+    });
+
+    revalidatePath(DASHBOARD_PATH);
+    const params = new URLSearchParams({
+      salesSync: "completed",
+      salesSyncProvider: result.provider,
+      salesSyncCandidateCount: String(result.candidateCount),
+      salesSyncImportedCount: String(result.importedCount),
+      salesSyncSkippedCount: String(result.skippedCount),
+    });
+    redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+  } catch (error) {
+    revalidatePath(DASHBOARD_PATH);
+    const params = new URLSearchParams({
+      salesSync: "error",
+      salesSyncMessage: formatFeedbackMessage(
+        error,
+        "Unable to run sales enablement adapter sync.",
+      ),
+    });
+    redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+  }
 }

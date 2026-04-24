@@ -14,13 +14,16 @@ import {
   getDeliveryStatus,
   getRecentLeadOverview,
   getRecentMessageTimeline,
+  getSalesEnablementReport,
 } from "@one-system/database";
 import { SectionCard } from "@one-system/ui";
 import {
   bookReactivationItemAtSlot,
   generateReviewsResponseDraft,
+  ingestSalesConsultationTranscript,
   markReactivationItemHandled,
   recordPaidAdsSpendEntry,
+  runSalesEnablementAdapterSync,
   runPaidAdsCampaign,
   runReactivationCampaign,
   runReviewsReferralsCampaign,
@@ -45,6 +48,12 @@ import {
   getPaidAdsSpendErrorMessage,
   getPaidAdsSpendFeedback,
 } from "./paid-ads-feedback";
+import {
+  getSalesEnablementErrorMessage,
+  getSalesEnablementFeedback,
+  getSalesEnablementSyncErrorMessage,
+  getSalesEnablementSyncFeedback,
+} from "./sales-enablement-feedback";
 
 const modules = [
   "Lead Capture + Instant Follow-Up",
@@ -323,6 +332,60 @@ function getModule4ReadinessChecks(args: {
   ];
 }
 
+function getModule5ReadinessChecks(args: {
+  recentAppointmentCount: number;
+  transcriptCount: number;
+  averageOverallScore: number;
+  bookingReadyCount: number;
+  objectionCount: number;
+  namedRepCount: number;
+}) {
+  return [
+    {
+      label: "Appointment context available",
+      ready: args.recentAppointmentCount > 0,
+      detail:
+        args.recentAppointmentCount > 0
+          ? `${args.recentAppointmentCount} recent appointments available for transcript capture`
+          : "Create or import appointments before capturing consultation transcripts",
+    },
+    {
+      label: "Transcript captured",
+      ready: args.transcriptCount > 0,
+      detail:
+        args.transcriptCount > 0
+          ? `${args.transcriptCount} consultation transcript(s) stored`
+          : "Capture the first consultation transcript",
+    },
+    {
+      label: "Analysis generated",
+      ready: args.transcriptCount > 0,
+      detail:
+        args.transcriptCount > 0
+          ? `${args.averageOverallScore.toFixed(1)} average overall consultation score`
+          : "No consultation analysis output yet",
+    },
+    {
+      label: "Booking signal visible",
+      ready: args.transcriptCount > 0,
+      detail:
+        args.transcriptCount > 0
+          ? `${args.bookingReadyCount} transcript(s) show strong booking intent`
+          : "Booking-intent scoring will appear after the first transcript",
+    },
+    {
+      label: "Rep coaching visibility",
+      ready: args.namedRepCount > 0,
+      detail:
+        args.namedRepCount > 0
+          ? `${args.namedRepCount} rep profile(s) have coaching metrics`
+          : args.objectionCount > 0
+            ? "Objection trends are visible, but rep names are missing from recent transcripts"
+            : "Capture transcripts with rep names to unlock coaching views",
+    },
+  ];
+}
+
 export default async function HomePage({
   searchParams,
 }: {
@@ -344,6 +407,14 @@ export default async function HomePage({
   const paidAdsSpendFeedback = getPaidAdsSpendFeedback(resolvedSearchParams);
   const paidAdsSpendErrorMessage =
     getPaidAdsSpendErrorMessage(resolvedSearchParams);
+  const salesEnablementFeedback =
+    getSalesEnablementFeedback(resolvedSearchParams);
+  const salesEnablementErrorMessage =
+    getSalesEnablementErrorMessage(resolvedSearchParams);
+  const salesEnablementSyncFeedback =
+    getSalesEnablementSyncFeedback(resolvedSearchParams);
+  const salesEnablementSyncErrorMessage =
+    getSalesEnablementSyncErrorMessage(resolvedSearchParams);
   const [
     deliveryStatus,
     funnelSnapshot,
@@ -363,6 +434,7 @@ export default async function HomePage({
     recentAppointments,
     recentMessages,
     recentThreads,
+    salesEnablementSnapshot,
   ] = await Promise.all([
     getDeliveryStatus(),
     getDashboardFunnelSnapshot(),
@@ -427,6 +499,10 @@ export default async function HomePage({
     getRecentAppointmentOverview(),
     getRecentMessageTimeline(),
     getRecentConversationThreads(),
+    getSalesEnablementReport({
+      workspaceId: "workspace_medspa_demo",
+      limit: 12,
+    }),
   ]);
   const liveImports = reactivationImports.filter((record) => !record.dryRun);
   const dryRunImports = reactivationImports.filter((record) => record.dryRun);
@@ -472,6 +548,16 @@ export default async function HomePage({
       defaultPaidAdsReadiness.skippedOptOutCount +
       defaultPaidAdsReadiness.skippedInvalidDestinationCount,
   });
+  const module5ReadinessChecks = getModule5ReadinessChecks({
+    recentAppointmentCount: recentAppointments.length,
+    transcriptCount: salesEnablementSnapshot.transcriptCount,
+    averageOverallScore: salesEnablementSnapshot.averageOverallScore,
+    bookingReadyCount: salesEnablementSnapshot.bookingReadyCount,
+    objectionCount: salesEnablementSnapshot.objectionCounts.length,
+    namedRepCount: salesEnablementSnapshot.repPerformance.filter(
+      (rep) => rep.agentName !== "unassigned",
+    ).length,
+  });
 
   return (
     <main className="page-shell">
@@ -488,8 +574,9 @@ export default async function HomePage({
       <section className="panel">
         <h2>Current Build Focus</h2>
         <p>
-          Platform foundation, lead intake, worker-based message delivery, and
-          the first end-to-end follow-up workflow on real Postgres persistence.
+          Shared platform foundations are in place through Module 4. Module 5 is
+          now focused on consultation transcript capture, analysis, and operator
+          visibility.
         </p>
       </section>
 
@@ -1414,6 +1501,234 @@ export default async function HomePage({
           </form>
         </SectionCard>
 
+        <SectionCard title="Sales Enablement Snapshot">
+          <div className="stats-grid">
+            <div className="stat">
+              <span className="stat-label">Transcripts</span>
+              <strong>{salesEnablementSnapshot.transcriptCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Avg overall</span>
+              <strong>{salesEnablementSnapshot.averageOverallScore.toFixed(1)}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Booking-ready</span>
+              <strong>{salesEnablementSnapshot.bookingReadyCount}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Top objections</span>
+              <strong>{salesEnablementSnapshot.objectionCounts.length}</strong>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Rep profiles</span>
+              <strong>
+                {
+                  salesEnablementSnapshot.repPerformance.filter(
+                    (rep) => rep.agentName !== "unassigned",
+                  ).length
+                }
+              </strong>
+            </div>
+          </div>
+          <div className="list-block">
+            {salesEnablementSnapshot.repPerformance.length === 0 ? (
+              <p>No rep coaching metrics available yet.</p>
+            ) : (
+              salesEnablementSnapshot.repPerformance.map((rep) => (
+                <div className="list-row" key={`rep-${rep.agentName}`}>
+                  <div>
+                    <strong>{rep.agentName}</strong>
+                    <p>
+                      {rep.transcriptCount} transcript(s) • avg overall{" "}
+                      {rep.averageOverallScore.toFixed(1)} • booking-ready{" "}
+                      {rep.bookingReadyCount}
+                    </p>
+                    <p>{rep.coachingFocus}</p>
+                  </div>
+                  <div className="row-meta">
+                    <span className="pill">
+                      {rep.topObjection ?? "no dominant objection"}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="list-block">
+            {salesEnablementSnapshot.transcripts.length === 0 ? (
+              <p>No consultation transcripts analyzed yet.</p>
+            ) : (
+              salesEnablementSnapshot.transcripts.map((transcript) => (
+                <div className="list-row" key={transcript.transcriptId}>
+                  <div>
+                    <strong>{transcript.firstName}</strong>
+                    <p>
+                      {transcript.agentName ?? "unassigned rep"} •{" "}
+                      {transcript.source} • overall {transcript.overallScore}/5
+                      {" • "}booking intent {transcript.bookingIntentScore}/5
+                    </p>
+                    <p>{transcript.summary}</p>
+                    <p>{transcript.nextStep}</p>
+                  </div>
+                  <div className="row-meta">
+                    <span className="pill">
+                      {transcript.primaryObjection ?? "no major objection"}
+                    </span>
+                    <time>{formatRelativeIso(transcript.createdAt)}</time>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Capture Consultation Transcript">
+          {salesEnablementFeedback ? (
+            <div className="notice-card">
+              <strong>Transcript captured</strong>
+              <p>
+                {salesEnablementFeedback.firstName ?? "Client"} • appointment{" "}
+                {salesEnablementFeedback.appointmentId.slice(0, 8)}
+              </p>
+              {salesEnablementFeedback.agentName ? (
+                <p>Rep {salesEnablementFeedback.agentName}</p>
+              ) : null}
+              <p>
+                Overall score {salesEnablementFeedback.overallScore ?? "n/a"}
+                {salesEnablementFeedback.primaryObjection
+                  ? ` • objection: ${salesEnablementFeedback.primaryObjection}`
+                  : ""}
+              </p>
+            </div>
+          ) : null}
+          {salesEnablementErrorMessage ? (
+            <div className="notice-card notice-error">
+              <strong>Transcript capture blocked</strong>
+              <p>{salesEnablementErrorMessage}</p>
+            </div>
+          ) : null}
+          <p className="action-warning">
+            Start Module 5 with one operator-entered consultation transcript tied
+            to an existing appointment, then turn it into summary, score, and next-step
+            guidance.
+          </p>
+          <form action={ingestSalesConsultationTranscript} className="control-form">
+            <label>
+              Appointment ID
+              <input
+                defaultValue={recentAppointments[0]?.appointmentId ?? ""}
+                name="appointmentId"
+                placeholder="Paste an existing appointment id"
+                type="text"
+              />
+            </label>
+            <label>
+              Source
+              <select defaultValue="manual" name="source">
+                <option value="manual">manual</option>
+                <option value="dev_capture">dev_capture</option>
+                <option value="callrail">callrail</option>
+                <option value="aircall">aircall</option>
+                <option value="twilio_voice">twilio_voice</option>
+              </select>
+            </label>
+            <label>
+              Rep name (optional)
+              <input
+                defaultValue=""
+                name="agentName"
+                placeholder="e.g. Maya"
+                type="text"
+              />
+            </label>
+            <label>
+              Consultation transcript
+              <textarea
+                defaultValue=""
+                name="transcriptText"
+                placeholder="Paste the consultation transcript here..."
+                rows={6}
+              />
+            </label>
+            <button className="text-button" type="submit">
+              Analyze transcript
+            </button>
+          </form>
+          <div className="list-block">
+            {recentAppointments.length === 0 ? (
+              <p>No recent appointments available yet.</p>
+            ) : (
+              recentAppointments.slice(0, 4).map((appointment) => (
+                <div className="list-row" key={`sales-${appointment.appointmentId}`}>
+                  <div>
+                    <strong>{appointment.firstName}</strong>
+                    <p>Appointment {appointment.appointmentId}</p>
+                  </div>
+                  <time>{formatRelativeIso(appointment.startsAt)}</time>
+                </div>
+              ))
+            )}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Run Adapter Transcript Sync">
+          {salesEnablementSyncFeedback ? (
+            <div className="notice-card">
+              <strong>Adapter sync completed</strong>
+              <p>
+                Provider {salesEnablementSyncFeedback.provider} processed{" "}
+                {salesEnablementSyncFeedback.candidateCount} candidate record(s).
+              </p>
+              <p>
+                Imported {salesEnablementSyncFeedback.importedCount} • Skipped{" "}
+                {salesEnablementSyncFeedback.skippedCount}
+              </p>
+            </div>
+          ) : null}
+          {salesEnablementSyncErrorMessage ? (
+            <div className="notice-card notice-error">
+              <strong>Adapter sync blocked</strong>
+              <p>{salesEnablementSyncErrorMessage}</p>
+            </div>
+          ) : null}
+          <p className="action-warning">
+            This uses the Module 5 adapter path (`dev_capture`) so we can validate
+            import orchestration and idempotent transcript ingestion.
+          </p>
+          <form action={runSalesEnablementAdapterSync} className="control-form">
+            <label>
+              Appointment ID
+              <input
+                defaultValue={recentAppointments[0]?.appointmentId ?? ""}
+                name="appointmentId"
+                placeholder="Paste an existing appointment id"
+                type="text"
+              />
+            </label>
+            <label>
+              Rep name (optional)
+              <input
+                defaultValue="Demo Rep"
+                name="agentName"
+                placeholder="e.g. Maya"
+                type="text"
+              />
+            </label>
+            <label>
+              Adapter transcript payload
+              <textarea
+                defaultValue=""
+                name="transcriptText"
+                placeholder="Paste transcript text to sync through the adapter path..."
+                rows={5}
+              />
+            </label>
+            <button className="text-button" type="submit">
+              Run dev adapter sync
+            </button>
+          </form>
+        </SectionCard>
+
         <SectionCard title="Module 2 Readiness">
           <div className="list-block">
             {module2ReadinessChecks.map((check) => (
@@ -1449,6 +1764,22 @@ export default async function HomePage({
         <SectionCard title="Module 4 Readiness">
           <div className="list-block">
             {module4ReadinessChecks.map((check) => (
+              <div className="list-row" key={check.label}>
+                <div>
+                  <strong>{check.label}</strong>
+                  <p>{check.detail}</p>
+                </div>
+                <span className={`pill ${check.ready ? "ready" : "needs_attention"}`}>
+                  {check.ready ? "ready" : "needs attention"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Module 5 Readiness">
+          <div className="list-block">
+            {module5ReadinessChecks.map((check) => (
               <div className="list-row" key={check.label}>
                 <div>
                   <strong>{check.label}</strong>

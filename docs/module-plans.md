@@ -71,7 +71,7 @@ Exit criteria:
 
 ## Module 4 - Paid Ads + Lead Nurturing
 
-Status: Completed and verified in seeded local workspace; keep active until explicit module switch approval.
+Status: Completed and verified in seeded local workspace.
 
 Completed checkpoints:
 
@@ -89,7 +89,7 @@ Current implementation notes:
 
 Remaining checkpoint:
 
-- targeted hardening/sign-off only; prepare Module 5 handoff only when explicitly approved
+- targeted regression fixes only if new validation reveals a concrete issue
 
 Seeded proof evidence (2026-04-23):
 
@@ -104,10 +104,44 @@ Seeded proof evidence (2026-04-23):
 
 ## Module 5 - Sales Enablement
 
-Status: Not started.
+Status: Active. Foundation + sync/idempotency + rep-coaching reporting slice completed and verified.
 
-Planned checkpoints:
+Completed checkpoints:
 
-- transcript ingestion and storage boundaries
-- scoring/summarization pipeline and coaching prompts
-- performance dashboards and conversion insight reporting
+- transcript ingestion contract and persistence boundaries defined for a manual/dev path
+- first-class consultation transcript entity and event flow implemented
+- transcript analysis primitives implemented for summary, score, objections, and next-step guidance
+- operator-facing transcript capture and outcome visibility added to the dashboard
+- first Module 5 report primitives added through `GET /sales-enablement/report`
+- API and module tests now include a positive Module 5 transcript flow
+- adapter-backed transcript sync execution is now in place via `syncConsultationTranscripts` (dev/static adapter path)
+- sync idempotency is now enforced on `workspaceId + source + externalId` with duplicate-skip reporting
+- sales transcript capture/sync now accepts optional `agentName` and persists it on transcript-received events
+- Module 5 reporting now includes rep-level coaching metrics (per-rep score averages, booking-ready counts, top objection, coaching focus)
+- dashboard Module 5 surfaces now include rep coaching visibility and transcript-level rep attribution
+- production hardening now covers protected API routes, dashboard mutation guardrails, delivery-attempt claims with stale-claim recovery, resilient worker startup retries, sensitive-data retention sweeps in the worker, bounded Module 5 transcript payloads, and Module 5 dashboard feedback parser tests
+
+Module 5 starting constraints:
+
+- keep transcript ingestion behind a typed integration boundary
+- prefer reusable analysis primitives in shared packages over module-local shortcuts
+- emit first-class events for transcript received, analysis completed, and score recorded
+- start with one demonstrable end-to-end transcript flow before broadening provider support
+
+Suggested first slice:
+
+- ingest one consultation transcript through a dev/static adapter
+- persist it against the canonical contact/lead/appointment context
+- generate one summary plus one structured scorecard
+- show the result in one dashboard operator surface
+
+Remaining checkpoints:
+
+- targeted regression hardening only if new validation reveals concrete issues
+- package and commit Module 5 checkpoint sign-off once approved
+
+Exit criteria:
+
+- one consultation can be ingested, analyzed, and viewed end-to-end
+- analysis output is traceable through first-class events
+- the design leaves room for real call-recording integrations without changing core entities

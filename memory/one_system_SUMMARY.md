@@ -6,9 +6,9 @@ M1 - Platform Foundation
 
 ## Active Module
 
-Module 4 - Paid Ads + Lead Nurturing
+Module 5 - Sales Enablement
 
-Module 3 is complete. Stay on Module 4 until explicitly told to switch modules.
+Modules 1 through 4 are complete. Module 5 is now active by explicit approval.
 
 ## What Exists
 
@@ -127,6 +127,22 @@ Module 3 is complete. Stay on Module 4 until explicitly told to switch modules.
 - roadmap and product spec module ordering are now aligned (Paid Ads before Sales Enablement)
 - module folders for all five product areas
 - canonical per-module execution plan in `docs/module-plans.md`
+- official low-context handoff guidance now lives in `docs/context-handoff.md`
+- official current-thread resume state now lives in `memory/one_system_HANDOFF.md`
+- Module 5 now has a real workspace package in `modules/sales_enablement` with transcript ingestion and analysis orchestration
+- consultation transcripts are now first-class records in Prisma (`ConsultationTranscript`) with summary, scorecard, and objection/next-step fields
+- Module 5 now emits first-class sales events (`sales_enablement.transcript_received`, `sales_enablement.analysis_completed`, `sales_enablement.score_recorded`)
+- Module 5 now has `POST /sales-enablement/transcripts` and `GET /sales-enablement/report` API endpoints
+- the dashboard now includes Module 5 transcript capture controls, outcome visibility, and a Module 5 readiness checklist
+- API integration tests now include a positive Module 5 flow (`/leads` -> `/appointments` -> `/sales-enablement/transcripts` -> `/sales-enablement/report`)
+- local Module 5 validation on 2026-04-23 passed `npm run typecheck`, `npm run test`, and `npm run build` after the first foundation slice
+- Module 5 transcript capture and sync now support optional `agentName`, and sales transcript events now persist rep identity in `sales_enablement.transcript_received`
+- Module 5 reporting now includes rep-level coaching visibility (`repPerformance`) with per-rep score averages, booking-ready counts, top objections, and coaching focus guidance
+- the dashboard now surfaces Module 5 rep coaching cards plus transcript-level rep attribution, and API sales tests assert rep attribution in report payloads
+- local Module 5 validation on 2026-04-24 passed `npm run typecheck`, `npm run test`, and `npm run build` after rep-level reporting updates
+- production hardening now protects API routes with operator API-key auth when configured, blocks unauthenticated dashboard mutations in production, claims outbound delivery attempts before send, recovers stale delivery claims, keeps worker intervals alive after startup DB errors, bounds Module 5 transcript payload size, and runs sensitive-data retention sweeps from the worker
+- dashboard feedback parser tests now cover Module 5 transcript capture and adapter sync URL states
+- local Module 5 hardening validation on 2026-04-24 passed `npm run typecheck`, `npm run test`, `npm run build`, `git diff --check`, and Prisma client generation
 - med spa selected as first implementation niche
 
 ## What We Decided
@@ -147,23 +163,23 @@ Module 3 is complete. Stay on Module 4 until explicitly told to switch modules.
 
 ## What Comes Next
 
-- keep Module 4 in validation/sign-off mode and only ship targeted hardening or bug-fix slices
-- ship targeted Module 4 hardening slices only if validation reveals concrete gaps
-- prepare a Plan Mode handoff only when explicitly approved to start Module 5
+- keep Module 5 active and finalize checkpoint sign-off packaging (summary + UAT evidence)
+- keep Module 4 closed unless validation reveals a concrete regression
 - keep commits to meaningful module/capability checkpoints, not every small slice
 
 ## Immediate Next Step
 
-- keep Module 4 as active module and do not start Module 5 without explicit instruction
-- keep validating each Module 4 checkpoint with `npm run typecheck`, `npm run build`, and `npm run test`
-- continue Module 4 hardening while preserving current seeded data state
+- finalize Module 5 sign-off and commit the checkpoint once approved
+- keep validating each Module 5 checkpoint with `npm run typecheck`, `npm run build`, and `npm run test`
+- wait for explicit user approval before any Module 6 planning or implementation
 
 ## How To Resume
 
 1. Read `AGENTS.md`
-2. Read this file
-3. Read `docs/module-plans.md`
-4. Run `git status --short`
-5. Review uncommitted files for the active module before editing
-6. Run `npm run typecheck`
-7. Continue Module 4 only unless the user explicitly says to switch modules
+2. Read `memory/one_system_HANDOFF.md`
+3. Read this file
+4. Read `docs/module-plans.md`
+5. Read `docs/context-handoff.md` only if a new handoff needs to be written
+6. Run `git status --short`
+7. Review uncommitted files for the active module before editing
+8. Continue Module 5 unless the user explicitly says to switch modules
