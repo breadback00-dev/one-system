@@ -4,13 +4,16 @@ import {
 } from "@one-system/database";
 import { recordPaidAdsSpendEntry } from "../actions";
 import { formatRelativeIso } from "../../../lib/format";
+import { getCurrentWorkspace } from "../../../lib/workspace";
 import { Card } from "../../../components/Card";
 import { MetricCard } from "../../../components/MetricCard";
 
 export default async function AdsPage() {
+  const workspaceId = (await getCurrentWorkspace()).id;
+
   const [snapshot, spendEntries] = await Promise.all([
-    getPaidAdsOutcomeReport({ workspaceId: "workspace_medspa_demo", limit: 50 }),
-    getRecentPaidAdsSpendEntries({ workspaceId: "workspace_medspa_demo", limit: 20 }),
+    getPaidAdsOutcomeReport({ workspaceId: workspaceId, limit: 50 }),
+    getRecentPaidAdsSpendEntries({ workspaceId: workspaceId, limit: 20 }),
   ]);
 
   const totalSpend = spendEntries.reduce((sum, e) => sum + e.amount, 0);
@@ -98,3 +101,4 @@ export default async function AdsPage() {
     </div>
   );
 }
+

@@ -365,6 +365,60 @@ async function ensureWorkspace(workspaceId: string): Promise<Workspace> {
   return toWorkspaceRecord(record);
 }
 
+export async function ensureWorkspaceById(workspaceId: string): Promise<Workspace> {
+  return ensureWorkspace(workspaceId);
+}
+
+export async function getWorkspaceByClerkUserId(
+  clerkUserId: string,
+): Promise<Workspace | null> {
+  const normalizedClerkUserId = clerkUserId.trim();
+
+  if (normalizedClerkUserId.length === 0) {
+    throw new Error("clerkUserId is required.");
+  }
+
+  const record = await prisma.workspace.findUnique({
+    where: { clerkUserId: normalizedClerkUserId },
+  });
+
+  return record ? toWorkspaceRecord(record) : null;
+}
+
+export async function getOrCreateWorkspaceForClerkUser(args: {
+  clerkUserId: string;
+  workspaceName?: string;
+  timezone?: string;
+}): Promise<Workspace> {
+  const normalizedClerkUserId = args.clerkUserId.trim();
+
+  if (normalizedClerkUserId.length === 0) {
+    throw new Error("clerkUserId is required.");
+  }
+
+  const existingWorkspace = await prisma.workspace.findUnique({
+    where: { clerkUserId: normalizedClerkUserId },
+  });
+
+  if (existingWorkspace) {
+    return toWorkspaceRecord(existingWorkspace);
+  }
+
+  const fallback = getDefaultWorkspace();
+  const workspaceName = args.workspaceName?.trim();
+  const timezone = args.timezone?.trim();
+  const workspace = await prisma.workspace.create({
+    data: {
+      clerkUserId: normalizedClerkUserId,
+      name: workspaceName && workspaceName.length > 0 ? workspaceName : fallback.name,
+      niche: fallback.niche,
+      timezone: timezone && timezone.length > 0 ? timezone : fallback.timezone,
+    },
+  });
+
+  return toWorkspaceRecord(workspace);
+}
+
 function withEventContactId(event: DomainEvent, contactId: string): DomainEvent {
   if (
     !event.payload ||

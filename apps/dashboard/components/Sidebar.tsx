@@ -11,6 +11,11 @@ interface NavItemProps {
   count?: number | string;
 }
 
+interface SidebarProps {
+  workspaceName: string;
+  workspacePlan: string;
+}
+
 const NavItem = ({ href, label, icon, dotColor, count }: NavItemProps) => {
   const pathname = usePathname();
   const isActive = pathname === href;
@@ -25,7 +30,18 @@ const NavItem = ({ href, label, icon, dotColor, count }: NavItemProps) => {
   );
 };
 
-export const Sidebar = () => {
+function getWorkspaceInitials(workspaceName: string): string {
+  const initials = workspaceName
+    .split(/\s+/)
+    .filter((part) => part.length > 0)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return initials || "WS";
+}
+
+export const Sidebar = ({ workspaceName, workspacePlan }: SidebarProps) => {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
@@ -73,10 +89,10 @@ export const Sidebar = () => {
 
       <div className="sidebar-footer">
         <div className="workspace-chip">
-          <div className="workspace-avatar">DW</div>
+          <div className="workspace-avatar">{getWorkspaceInitials(workspaceName)}</div>
           <div>
-            <div className="workspace-name">Demo Workspace</div>
-            <div className="workspace-plan">Preview · M6 Active</div>
+            <div className="workspace-name">{workspaceName}</div>
+            <div className="workspace-plan">{workspacePlan}</div>
           </div>
           <UserButton />
         </div>

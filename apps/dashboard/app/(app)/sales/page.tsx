@@ -9,7 +9,7 @@ import { MetricCard } from "../../../components/MetricCard";
 
 export default async function SalesPage() {
   const [snapshot, appointments] = await Promise.all([
-    getSalesEnablementReport({ workspaceId: "workspace_medspa_demo", limit: 12 }),
+    getSalesEnablementReport({ workspaceId: workspaceId, limit: 12 }),
     getRecentAppointmentOverview(),
   ]);
 
@@ -78,3 +78,4 @@ export default async function SalesPage() {
     </div>
   );
 }
+

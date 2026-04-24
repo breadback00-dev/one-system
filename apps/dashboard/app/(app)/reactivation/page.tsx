@@ -10,9 +10,9 @@ import { MetricCard } from "../../../components/MetricCard";
 
 export default async function ReactivationPage() {
   const [snapshot, runs, queue] = await Promise.all([
-    getReactivationOutcomeReport({ workspaceId: "workspace_medspa_demo", limit: 25 }),
-    getRecentReactivationRunSummaries({ workspaceId: "workspace_medspa_demo", limit: 10 }),
-    getReactivationActionQueue({ workspaceId: "workspace_medspa_demo", limit: 25 }),
+    getReactivationOutcomeReport({ workspaceId: workspaceId, limit: 25 }),
+    getRecentReactivationRunSummaries({ workspaceId: workspaceId, limit: 10 }),
+    getReactivationActionQueue({ workspaceId: workspaceId, limit: 25 }),
   ]);
 
   return (
@@ -93,3 +93,4 @@ export default async function ReactivationPage() {
     </div>
   );
 }
+

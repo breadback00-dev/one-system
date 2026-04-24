@@ -9,6 +9,7 @@ datasource db {
 
 model Workspace {
   id                     String                  @id @default(cuid())
+  clerkUserId            String?                 @unique
   name                   String
   niche                  String
   timezone               String

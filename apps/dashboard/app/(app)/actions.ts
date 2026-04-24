@@ -24,6 +24,7 @@ import {
   syncConsultationTranscripts,
 } from "@one-system/sales-enablement";
 import { assertDashboardMutationAllowed } from "@one-system/config";
+import { getCurrentWorkspace } from "../../lib/workspace";
 
 const DASHBOARD_PATH = "/";
 
@@ -51,8 +52,14 @@ function formatFeedbackMessage(error: unknown, fallback: string): string {
   return normalized.slice(0, 220);
 }
 
+async function getWorkspaceIdForRequest(): Promise<string> {
+  const workspace = await getCurrentWorkspace();
+  return workspace.id;
+}
+
 export async function markReactivationItemHandled(formData: FormData) {
   assertDashboardMutationAllowed();
+  const workspaceId = await getWorkspaceIdForRequest();
 
   const queuedEventId = String(formData.get("queuedEventId") ?? "").trim();
   const contactId = String(formData.get("contactId") ?? "").trim();
@@ -73,13 +80,13 @@ export async function markReactivationItemHandled(formData: FormData) {
 
   try {
     await assertReactivationFollowUpActionable({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       queuedEventId,
       contactId,
     });
 
     await markReactivationFollowUpHandled({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       queuedEventId,
       contactId,
       ...(note ? { note } : {}),
@@ -107,6 +114,7 @@ export async function markReactivationItemHandled(formData: FormData) {
 
 export async function bookReactivationItemAtSlot(formData: FormData) {
   assertDashboardMutationAllowed();
+  const workspaceId = await getWorkspaceIdForRequest();
 
   const queuedEventId = String(formData.get("queuedEventId") ?? "").trim();
   const contactId = String(formData.get("contactId") ?? "").trim();
@@ -138,13 +146,13 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
 
   try {
     await assertReactivationFollowUpActionable({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       queuedEventId,
       contactId,
     });
 
     const availableSlots = await getAvailableBookingSlots({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       daysAhead: 14,
       limit: 50,
     });
@@ -157,7 +165,7 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
     }
 
     const isAvailable = await isAppointmentSlotAvailable({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       startsAt: startsAt.toISOString(),
     });
 
@@ -166,7 +174,7 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
     }
 
     const appointmentResult = createAppointment({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       contactId,
       startsAt: startsAt.toISOString(),
       outcome: "scheduled",
@@ -174,7 +182,7 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
 
     await saveAppointmentTransaction(appointmentResult);
     await markReactivationFollowUpHandled({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       queuedEventId,
       contactId,
       note: `Booked from Module 2 dashboard queue for ${startsAt.toISOString()}`,
@@ -205,6 +213,7 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
 
 export async function runReactivationCampaign(formData: FormData) {
   assertDashboardMutationAllowed();
+  const workspaceId = await getWorkspaceIdForRequest();
 
   const campaignKey =
     String(formData.get("campaignKey") ?? "").trim() || "reactivation-default";
@@ -223,7 +232,7 @@ export async function runReactivationCampaign(formData: FormData) {
 
   try {
     result = await executeReactivationRun({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       inactiveDays: Number.isFinite(inactiveDays)
         ? Math.max(7, Math.floor(inactiveDays))
         : 30,
@@ -271,6 +280,7 @@ export async function runReactivationCampaign(formData: FormData) {
 
 export async function runReviewsReferralsCampaign(formData: FormData) {
   assertDashboardMutationAllowed();
+  const workspaceId = await getWorkspaceIdForRequest();
 
   const campaignKey =
     String(formData.get("campaignKey") ?? "").trim() ||
@@ -289,7 +299,7 @@ export async function runReviewsReferralsCampaign(formData: FormData) {
 
   try {
     result = await executeReviewsReferralsRun({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       completedDaysAgo: Number.isFinite(completedDaysAgo)
         ? Math.max(1, Math.min(120, Math.floor(completedDaysAgo)))
         : 2,
@@ -330,6 +340,7 @@ export async function runReviewsReferralsCampaign(formData: FormData) {
 
 export async function runPaidAdsCampaign(formData: FormData) {
   assertDashboardMutationAllowed();
+  const workspaceId = await getWorkspaceIdForRequest();
 
   const campaignKey =
     String(formData.get("campaignKey") ?? "").trim() || "paid-ads-default";
@@ -343,7 +354,7 @@ export async function runPaidAdsCampaign(formData: FormData) {
 
   try {
     result = await executePaidAdsRun({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       limit: Number.isFinite(limit)
         ? Math.max(1, Math.min(200, Math.floor(limit)))
         : 25,
@@ -388,6 +399,7 @@ export async function runPaidAdsCampaign(formData: FormData) {
 
 export async function recordPaidAdsSpendEntry(formData: FormData) {
   assertDashboardMutationAllowed();
+  const workspaceId = await getWorkspaceIdForRequest();
 
   const source = String(formData.get("source") ?? "").trim();
   const utmSource = String(formData.get("utmSource") ?? "").trim();
@@ -399,7 +411,7 @@ export async function recordPaidAdsSpendEntry(formData: FormData) {
 
   try {
     const entry = await recordPaidAdsSpend({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       source,
       reportDate,
       amount,
@@ -432,6 +444,7 @@ export async function recordPaidAdsSpendEntry(formData: FormData) {
 
 export async function generateReviewsResponseDraft(formData: FormData) {
   assertDashboardMutationAllowed();
+  const workspaceId = await getWorkspaceIdForRequest();
 
   const customerMessage = String(formData.get("customerMessage") ?? "").trim();
   const customerFirstName = String(formData.get("customerFirstName") ?? "").trim();
@@ -440,7 +453,7 @@ export async function generateReviewsResponseDraft(formData: FormData) {
 
   try {
     result = createReviewResponseDraft({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       customerMessage,
       ...(customerFirstName ? { customerFirstName } : {}),
     });
@@ -470,6 +483,7 @@ export async function generateReviewsResponseDraft(formData: FormData) {
 
 export async function ingestSalesConsultationTranscript(formData: FormData) {
   assertDashboardMutationAllowed();
+  const workspaceId = await getWorkspaceIdForRequest();
 
   const appointmentId = String(formData.get("appointmentId") ?? "").trim();
   const source = String(formData.get("source") ?? "").trim() || "manual";
@@ -478,7 +492,7 @@ export async function ingestSalesConsultationTranscript(formData: FormData) {
 
   try {
     const result = await ingestConsultationTranscript({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       appointmentId,
       source: source as
         | "manual"
@@ -517,6 +531,7 @@ export async function ingestSalesConsultationTranscript(formData: FormData) {
 
 export async function runSalesEnablementAdapterSync(formData: FormData) {
   assertDashboardMutationAllowed();
+  const workspaceId = await getWorkspaceIdForRequest();
 
   const appointmentId = String(formData.get("appointmentId") ?? "").trim();
   const transcriptText = String(formData.get("transcriptText") ?? "").trim();
@@ -527,7 +542,7 @@ export async function runSalesEnablementAdapterSync(formData: FormData) {
 
   try {
     const result = await syncConsultationTranscripts({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       dateFrom: dateFrom.toISOString(),
       dateTo: now.toISOString(),
       limit: 25,
@@ -564,3 +579,4 @@ export async function runSalesEnablementAdapterSync(formData: FormData) {
     redirect(`${DASHBOARD_PATH}?${params.toString()}`);
   }
 }
+

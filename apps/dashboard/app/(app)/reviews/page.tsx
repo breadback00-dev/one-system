@@ -6,7 +6,7 @@ import { Card } from "../../../components/Card";
 import { MetricCard } from "../../../components/MetricCard";
 
 export default async function ReviewsPage() {
-  const snapshot = await getReviewReferralOutcomeReport({ workspaceId: "workspace_medspa_demo", limit: 25 });
+  const snapshot = await getReviewReferralOutcomeReport({ workspaceId: workspaceId, limit: 25 });
 
   return (
     <div className="page-reviews">
@@ -47,3 +47,4 @@ export default async function ReviewsPage() {
     </div>
   );
 }
+

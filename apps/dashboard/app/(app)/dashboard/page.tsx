@@ -436,9 +436,9 @@ export default async function HomePage({
   ] = await Promise.all([
     getDeliveryStatus(),
     getDashboardFunnelSnapshot(),
-    getAvailableBookingSlots({ workspaceId: "workspace_medspa_demo", limit: 4 }),
+    getAvailableBookingSlots({ workspaceId: workspaceId, limit: 4 }),
     previewReactivationRun({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       inactiveDays: 30,
       limit: 25,
       cooldownDays: 14,
@@ -446,31 +446,31 @@ export default async function HomePage({
       audienceSegment: "all",
     }),
     previewReviewsReferralsRun({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       completedDaysAgo: 2,
       limit: 25,
       cooldownDays: 14,
       campaignKey: "reviews-referrals-default",
     }),
     previewPaidAdsRun({
-      workspaceId: "workspace_medspa_demo",
+      workspaceId: workspaceId,
       limit: 25,
       cooldownDays: 14,
       campaignKey: "paid-ads-default",
     }),
-    getReactivationOutcomeReport({ workspaceId: "workspace_medspa_demo", limit: 25 }),
-    getReviewReferralOutcomeReport({ workspaceId: "workspace_medspa_demo", limit: 25 }),
-    getPaidAdsOutcomeReport({ workspaceId: "workspace_medspa_demo", limit: 50 }),
-    getRecentPaidAdsSpendEntries({ workspaceId: "workspace_medspa_demo", limit: 6 }),
-    getRecentReactivationRunSummaries({ workspaceId: "workspace_medspa_demo", limit: 6 }),
-    getReactivationActionQueue({ workspaceId: "workspace_medspa_demo", limit: 25 }),
-    getRecentReactivationImports({ workspaceId: "workspace_medspa_demo", limit: 5 }),
-    getRecentReactivationHandledItems({ workspaceId: "workspace_medspa_demo", limit: 6 }),
+    getReactivationOutcomeReport({ workspaceId: workspaceId, limit: 25 }),
+    getReviewReferralOutcomeReport({ workspaceId: workspaceId, limit: 25 }),
+    getPaidAdsOutcomeReport({ workspaceId: workspaceId, limit: 50 }),
+    getRecentPaidAdsSpendEntries({ workspaceId: workspaceId, limit: 6 }),
+    getRecentReactivationRunSummaries({ workspaceId: workspaceId, limit: 6 }),
+    getReactivationActionQueue({ workspaceId: workspaceId, limit: 25 }),
+    getRecentReactivationImports({ workspaceId: workspaceId, limit: 5 }),
+    getRecentReactivationHandledItems({ workspaceId: workspaceId, limit: 6 }),
     getRecentLeadOverview(),
     getRecentAppointmentOverview(),
     getRecentMessageTimeline(),
     getRecentConversationThreads(),
-    getSalesEnablementReport({ workspaceId: "workspace_medspa_demo", limit: 12 }),
+    getSalesEnablementReport({ workspaceId: workspaceId, limit: 12 }),
   ]);
 
   const liveImports = reactivationImports.filter((record) => !record.dryRun);
@@ -780,3 +780,4 @@ export default async function HomePage({
     </>
   );
 }
+
