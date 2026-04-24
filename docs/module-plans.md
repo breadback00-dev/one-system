@@ -120,6 +120,7 @@ Completed checkpoints:
 - Module 5 reporting now includes rep-level coaching metrics (per-rep score averages, booking-ready counts, top objection, coaching focus)
 - dashboard Module 5 surfaces now include rep coaching visibility and transcript-level rep attribution
 - production hardening now covers protected API routes, dashboard mutation guardrails, delivery-attempt claims with stale-claim recovery, resilient worker startup retries, sensitive-data retention sweeps in the worker, bounded Module 5 transcript payloads, and Module 5 dashboard feedback parser tests
+- Module 5 sign-off/UAT evidence is packaged in `docs/module5-signoff.md`
 
 Module 5 starting constraints:
 
@@ -138,7 +139,7 @@ Suggested first slice:
 Remaining checkpoints:
 
 - targeted regression hardening only if new validation reveals concrete issues
-- package and commit Module 5 checkpoint sign-off once approved
+- wait for explicit approval before Module 6 planning or implementation
 
 Exit criteria:
 

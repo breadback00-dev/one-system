@@ -143,6 +143,7 @@ Modules 1 through 4 are complete. Module 5 is now active by explicit approval.
 - production hardening now protects API routes with operator API-key auth when configured, blocks unauthenticated dashboard mutations in production, claims outbound delivery attempts before send, recovers stale delivery claims, keeps worker intervals alive after startup DB errors, bounds Module 5 transcript payload size, and runs sensitive-data retention sweeps from the worker
 - dashboard feedback parser tests now cover Module 5 transcript capture and adapter sync URL states
 - local Module 5 hardening validation on 2026-04-24 passed `npm run typecheck`, `npm run test`, `npm run build`, `git diff --check`, and Prisma client generation
+- Module 5 sign-off/UAT evidence is packaged in `docs/module5-signoff.md`
 - med spa selected as first implementation niche
 
 ## What We Decided
@@ -163,14 +164,14 @@ Modules 1 through 4 are complete. Module 5 is now active by explicit approval.
 
 ## What Comes Next
 
-- keep Module 5 active and finalize checkpoint sign-off packaging (summary + UAT evidence)
+- keep Module 5 in sign-off/approval mode
 - keep Module 4 closed unless validation reveals a concrete regression
 - keep commits to meaningful module/capability checkpoints, not every small slice
 
 ## Immediate Next Step
 
-- finalize Module 5 sign-off and commit the checkpoint once approved
-- keep validating each Module 5 checkpoint with `npm run typecheck`, `npm run build`, and `npm run test`
+- get explicit approval before Module 6 planning or implementation
+- keep validating any follow-up checkpoint with `npm run typecheck`, `npm run build`, and `npm run test`
 - wait for explicit user approval before any Module 6 planning or implementation
 
 ## How To Resume
