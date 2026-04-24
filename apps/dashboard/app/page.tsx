@@ -99,57 +99,64 @@ export default function LandingPage() {
       <section className="section">
         <div className="section-inner">
           <div className="section-label">Modules</div>
-          <h2 className="section-title">Five modules on one platform.</h2>
-          <div className="modules-grid">
-            <div className="module-card">
+          <h2 className="section-title">Five modules. One shipped, four in preview.</h2>
+          <p className="section-lede" style={{ marginBottom: "40px" }}>
+            Database Reactivation is live end-to-end. The other four are
+            surface-complete with real server actions, real data models, and a
+            consistent UI — actively hardening toward full production readiness.
+          </p>
+
+          {/* Flagship */}
+          <div className="module-card module-card-flagship">
+            <div className="module-card-flagship-head">
               <div className="module-dot module-dot-green" />
-              <h3>Lead Capture</h3>
-              <p>
-                Instant follow-up on every inbound lead. Missed-call text-back,
-                qualification, and booking handoff in one flow.
-              </p>
+              <span className="module-status-live">Live</span>
             </div>
-            <div className="module-card">
-              <div className="module-dot module-dot-green" />
-              <h3>Database Reactivation</h3>
-              <p>
-                Turn dormant customers into booked revenue. Audience selection,
-                cooldown-aware outreach, and reply handling — end to end.
-              </p>
-            </div>
-            <div className="module-card">
-              <div className="module-dot module-dot-amber" />
-              <h3>Reviews &amp; Referrals</h3>
-              <p>
-                Post-visit review flows, AI-drafted responses, and a referral
-                loop that actually tracks who sent who.
-              </p>
-            </div>
-            <div className="module-card">
-              <div className="module-dot module-dot-green" />
-              <h3>Paid Ads</h3>
-              <p>
-                Source attribution and cost-per-booking reporting for the paid
-                channels you already run. Know which ad paid for itself.
-              </p>
-            </div>
-            <div className="module-card">
-              <div className="module-dot module-dot-blue" />
-              <h3>Sales Enablement</h3>
-              <p>
-                Consultation transcripts, objection libraries, and post-call
-                follow-up — the layer between a booked consultation and a
-                closed sale.
-              </p>
-            </div>
-            <div className="module-card module-card-muted">
-              <div className="module-dot module-dot-muted" />
-              <h3>Shared platform</h3>
-              <p>
-                One workspace, one contact graph, one event timeline. No
-                module is a silo — every touch feeds every view.
-              </p>
-            </div>
+            <h3>Database Reactivation</h3>
+            <p>
+              Import dormant contacts from your CRM, select an audience segment,
+              run a cooldown-aware outreach campaign, track replies and
+              qualification, book via a generated booking link. Every stage
+              measurable in the dashboard.
+            </p>
+            <Link href="/reactivation" className="btn-ghost" style={{ marginTop: "20px", display: "inline-flex" }}>
+              See it in the demo →
+            </Link>
+          </div>
+
+          {/* Other four */}
+          <div className="modules-grid" style={{ marginTop: "16px" }}>
+            {[
+              {
+                label: "Lead Capture",
+                desc: "Instant follow-up on every inbound lead. Missed-call text-back, qualification, and booking handoff.",
+                color: "amber",
+              },
+              {
+                label: "Reviews & Referrals",
+                desc: "Post-visit review flows, AI-drafted responses, and a referral loop that tracks who sent who.",
+                color: "amber",
+              },
+              {
+                label: "Paid Ads",
+                desc: "Source attribution and cost-per-booking reporting for the paid channels you already run.",
+                color: "amber",
+              },
+              {
+                label: "Sales Enablement",
+                desc: "Consultation transcripts, objection libraries, and post-call follow-up to close more consultations.",
+                color: "amber",
+              },
+            ].map((m) => (
+              <div key={m.label} className="module-card">
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div className={`module-dot module-dot-${m.color}`} />
+                  <span className="module-status-preview">Preview</span>
+                </div>
+                <h3>{m.label}</h3>
+                <p>{m.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>

@@ -26,7 +26,8 @@ import {
 import { assertDashboardMutationAllowed } from "@one-system/config";
 import { getCurrentWorkspace } from "../../lib/workspace";
 
-const DASHBOARD_PATH = "/";
+const DASHBOARD_PATH = "/dashboard";
+const REACTIVATION_PATH = "/reactivation";
 
 function parseAudienceSegment(value: FormDataEntryValue | null): ReactivationAudienceSegment {
   const audienceSegment = String(value ?? "").trim();
@@ -74,8 +75,8 @@ export async function markReactivationItemHandled(formData: FormData) {
       queueActionStatus: "error",
       queueActionMessage: "Reactivation queue item is missing required identifiers.",
     });
-    revalidatePath(DASHBOARD_PATH);
-    redirect(`${DASHBOARD_PATH}?${feedbackParams.toString()}`);
+    revalidatePath(REACTIVATION_PATH);
+    redirect(`${REACTIVATION_PATH}?${feedbackParams.toString()}`);
   }
 
   try {
@@ -108,8 +109,8 @@ export async function markReactivationItemHandled(formData: FormData) {
     });
   }
 
-  revalidatePath(DASHBOARD_PATH);
-  redirect(`${DASHBOARD_PATH}?${feedbackParams.toString()}`);
+  revalidatePath(REACTIVATION_PATH);
+  redirect(`${REACTIVATION_PATH}?${feedbackParams.toString()}`);
 }
 
 export async function bookReactivationItemAtSlot(formData: FormData) {
@@ -128,8 +129,8 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
       queueActionStatus: "error",
       queueActionMessage: "Reactivation queue item is missing required identifiers.",
     });
-    revalidatePath(DASHBOARD_PATH);
-    redirect(`${DASHBOARD_PATH}?${feedbackParams.toString()}`);
+    revalidatePath(REACTIVATION_PATH);
+    redirect(`${REACTIVATION_PATH}?${feedbackParams.toString()}`);
   }
 
   const startsAt = new Date(startsAtInput);
@@ -140,8 +141,8 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
       queueActionStatus: "error",
       queueActionMessage: "Selected appointment slot is invalid.",
     });
-    revalidatePath(DASHBOARD_PATH);
-    redirect(`${DASHBOARD_PATH}?${feedbackParams.toString()}`);
+    revalidatePath(REACTIVATION_PATH);
+    redirect(`${REACTIVATION_PATH}?${feedbackParams.toString()}`);
   }
 
   try {
@@ -207,8 +208,8 @@ export async function bookReactivationItemAtSlot(formData: FormData) {
     });
   }
 
-  revalidatePath(DASHBOARD_PATH);
-  redirect(`${DASHBOARD_PATH}?${feedbackParams.toString()}`);
+  revalidatePath(REACTIVATION_PATH);
+  redirect(`${REACTIVATION_PATH}?${feedbackParams.toString()}`);
 }
 
 export async function runReactivationCampaign(formData: FormData) {
@@ -246,7 +247,7 @@ export async function runReactivationCampaign(formData: FormData) {
       audienceSegment,
     });
   } catch (error) {
-    revalidatePath(DASHBOARD_PATH);
+    revalidatePath(REACTIVATION_PATH);
     const params = new URLSearchParams({
       reactivationRun: "error",
       reactivationRunMessage: formatFeedbackMessage(
@@ -254,10 +255,10 @@ export async function runReactivationCampaign(formData: FormData) {
         "Unable to queue the reactivation campaign.",
       ),
     });
-    redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+    redirect(`${REACTIVATION_PATH}?${params.toString()}`);
   }
 
-  revalidatePath(DASHBOARD_PATH);
+  revalidatePath(REACTIVATION_PATH);
   const params = new URLSearchParams({
     reactivationRun: "queued",
     campaignKey: result.campaignKey,
@@ -275,7 +276,7 @@ export async function runReactivationCampaign(formData: FormData) {
       result.segmentBreakdown.eligiblePastCustomerCount,
     ),
   });
-  redirect(`${DASHBOARD_PATH}?${params.toString()}`);
+  redirect(`${REACTIVATION_PATH}?${params.toString()}`);
 }
 
 export async function runReviewsReferralsCampaign(formData: FormData) {

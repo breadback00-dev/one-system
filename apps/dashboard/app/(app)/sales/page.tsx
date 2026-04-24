@@ -6,8 +6,10 @@ import { ingestSalesConsultationTranscript } from "../actions";
 import { formatRelativeIso } from "../../../lib/format";
 import { Card } from "../../../components/Card";
 import { MetricCard } from "../../../components/MetricCard";
+import { getCurrentWorkspace } from "../../../lib/workspace";
 
 export default async function SalesPage() {
+  const { id: workspaceId } = await getCurrentWorkspace();
   const [snapshot, appointments] = await Promise.all([
     getSalesEnablementReport({ workspaceId: workspaceId, limit: 12 }),
     getRecentAppointmentOverview(),

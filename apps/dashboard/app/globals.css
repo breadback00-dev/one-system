@@ -560,3 +560,67 @@
 }
 
 .funnel-step-shape:hover { opacity: 1; }
+
+/* --- Alert (additional variants) --- */
+.alert-red { background: var(--red-bg); color: var(--red); border: 1px solid rgba(154,58,30,0.2); }
+
+/* --- List block (edge-to-edge table wrapper inside card-body) --- */
+.list-block { margin: -12px -18px -16px; overflow: hidden; }
+
+/* --- Control form (action form inside card) --- */
+.control-form { display: flex; flex-direction: column; }
+
+/* --- Empty state --- */
+.empty-state {
+  padding: 28px 18px;
+  text-align: center;
+}
+.empty-state-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.empty-state-body {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+/* --- Skeleton loading --- */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position:  600px 0; }
+}
+
+.pulse-cell-skeleton {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  height: 96px;
+  position: relative;
+  overflow: hidden;
+}
+.pulse-cell-skeleton::after,
+.card-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--line) 50%,
+    transparent 100%
+  );
+  background-size: 600px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.card-skeleton {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  height: 180px;
+  position: relative;
+  overflow: hidden;
+}

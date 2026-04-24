@@ -6,6 +6,15 @@ const isPublicRoute = createRouteMatcher([
   "/demo(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  // App routes are accessible without auth — unauthenticated users see the
+  // demo workspace via getCurrentWorkspace(). Sign-up creates a private workspace.
+  "/dashboard(.*)",
+  "/reactivation(.*)",
+  "/leads(.*)",
+  "/reviews(.*)",
+  "/ads(.*)",
+  "/sales(.*)",
+  "/platform(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {

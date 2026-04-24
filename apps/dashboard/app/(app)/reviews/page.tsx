@@ -4,8 +4,10 @@ import {
 import { generateReviewsResponseDraft, runReviewsReferralsCampaign } from "../actions";
 import { Card } from "../../../components/Card";
 import { MetricCard } from "../../../components/MetricCard";
+import { getCurrentWorkspace } from "../../../lib/workspace";
 
 export default async function ReviewsPage() {
+  const { id: workspaceId } = await getCurrentWorkspace();
   const snapshot = await getReviewReferralOutcomeReport({ workspaceId: workspaceId, limit: 25 });
 
   return (

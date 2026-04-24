@@ -23,7 +23,8 @@
     "db:down": "docker compose -f infra/docker-compose.yml down",
     "db:generate": "npm run prisma:generate --workspace @one-system/database",
     "db:migrate": "npm run prisma:migrate --workspace @one-system/database",
-    "db:push": "npm run prisma:push --workspace @one-system/database"
+    "db:push": "npm run prisma:push --workspace @one-system/database",
+    "seed:demo": "dotenv -e .env -e .env.local -- tsx packages/database/src/seed-demo.ts"
   },
   "engines": {
     "node": ">=24.0.0",

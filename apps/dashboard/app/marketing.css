@@ -209,6 +209,41 @@
 .module-dot-blue { background: var(--blue); }
 .module-dot-muted { background: var(--faint); }
 
+.module-card-flagship {
+  border-color: var(--green);
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(61,110,53,0.04) 100%);
+  margin-bottom: 0;
+}
+.module-card-flagship-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.module-card-flagship h3 { font-size: 18px; margin: 10px 0 10px; }
+.module-card-flagship p { font-size: 15px; }
+
+.module-status-live {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--green);
+  background: var(--green-bg);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.module-status-preview {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--amber);
+  background: var(--amber-bg);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
 /* CTA */
 .cta-inner { text-align: center; }
 .cta-inner .section-title,

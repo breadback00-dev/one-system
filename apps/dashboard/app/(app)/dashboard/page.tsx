@@ -58,6 +58,7 @@ import { MetricCard } from "../../../components/MetricCard";
 import { Card } from "../../../components/Card";
 import { ReadinessList } from "../../../components/ReadinessList";
 import { FunnelChart } from "../../../components/FunnelChart";
+import { getCurrentWorkspace } from "../../../lib/workspace";
 
 const modules = [
   "Lead Capture + Instant Follow-Up",
@@ -412,6 +413,7 @@ export default async function HomePage({
   const salesEnablementSyncFeedback = getSalesEnablementSyncFeedback(resolvedSearchParams);
   const salesEnablementSyncErrorMessage = getSalesEnablementSyncErrorMessage(resolvedSearchParams);
   const platformReadiness = getPlatformFoundationReadiness();
+  const { id: workspaceId } = await getCurrentWorkspace();
 
   const [
     deliveryStatus,
