@@ -7,13 +7,14 @@ Capture, nurture, reactivate, review, and convert — on one platform with share
 
 ---
 
-## Live demo
+## Demo status
 
-- **App demo:** _deploying to Vercel — link incoming_
-- **Landing:** _same domain, `/`_
-- **Dashboard:** _same domain, `/dashboard`_
+- **Local demo:** `npm run dev` starts the dashboard app at `http://localhost:3000`.
+- **Public demo:** not published yet.
+- **Dashboard route:** `/dashboard`
+- **Deepest module:** `/reactivation`
 
-60-second walkthrough: _Loom link to be added after deploy_
+The repo should not be treated as a fully deployed SaaS. It is a portfolio build with a substantial local dashboard and operator-platform architecture, but the public demo and walkthrough still need to be published.
 
 ---
 
@@ -83,8 +84,11 @@ Env vars live in `.env` at the repo root. A sample template is in `.env.example`
 ## Running the tests
 
 ```bash
+npm run db:generate     # generate Prisma client first
 npm test               # across all workspaces
 ```
+
+Some integration tests expect a configured `DATABASE_URL`. The dashboard, domain, database utility, paid ads, reviews/referrals, and sales enablement tests can run locally after Prisma generation; the API integration path needs database configuration.
 
 ---
 
@@ -111,4 +115,6 @@ The platform is deliberately vertical-agnostic — "appointment business" is the
 
 ## Honest status
 
-This is a portfolio build — one developer, ~6 months, deliberately disciplined architecture on top of a small real feature surface. The polish target is "near-shippable demo," not "production SaaS." See the demo for what's real; see the code for what's architected.
+This is a portfolio build — one developer, ~6 months, deliberately disciplined architecture on top of a small real feature surface. The polish target is "near-shippable demo," not "production SaaS."
+
+Current validation caveat: the dashboard build succeeds after Prisma generation, but the full monorepo build still needs cleanup in `packages/database/src/seed-demo.ts`, and API integration tests need `DATABASE_URL`. This repo has enough substance to keep polishing, but it should not be pinned until those validation issues and the public demo are fixed.
